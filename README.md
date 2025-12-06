@@ -38,7 +38,8 @@ Computer Vision and Deep Learning Based Senescent Cell Identification
   ```
   python main_transfer_test.py /path/to/training/images /path/to/testing/images [--options]
   ```
-  You can see the options by runing the script without arguments
+  You can see the options by runing the script without arguments.
+  * Please make sure that the folders (which will be treated as labels) in the /path/to/training/images and /path/to/testing/images are the same.
 
 ## Contact
   Dr. Teng-Hui Huang
