@@ -4,6 +4,7 @@ import os
 import sys
 import pickle
 import torch
+from torch.nn import functional as F
 import torchvision
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
@@ -12,6 +13,7 @@ from networks import VanillaCnn,PreFc
 import torch.nn as nn
 import myutils as uts
 import argparse
+import evaluate as ev
 
 parser = argparse.ArgumentParser()
 parser.add_argument("train_datapath",type=str,help="path/to/training/image/folder")
@@ -135,6 +137,8 @@ def test():
     acc_cnt = 0
     tot_cnt = 0
     cr_loss = nn.CrossEntropyLoss(reduction='sum')
+    y_pred = []
+    y_true = []
     network.eval()
     for bi, (X,Y) in enumerate(ts_loader):
         X = X.to(device)
@@ -143,19 +147,25 @@ def test():
             llr_out = network(X)
         loss = cr_loss(llr_out,Y)
         loss_sum += loss.item()
+        y_pred.append(F.softmax(llr_out,dim=1).detach().cpu())
+        y_true.append(Y.detach().cpu())
         acc_cnt += (llr_out.argmax(dim=1) == Y).sum().item()
         tot_cnt += len(Y)
+    y_pred_all = torch.cat(y_pred,dim=0)
+    y_true_all = torch.cat(y_true,dim=0)
+    ev_dict = ev.metrics_all(y_pred_all,y_true_all)
     print("Testing: loss={:.5f}, Accuracy:{:.5f}({:}/{:})".format(
         loss_sum/len(ts_loader),
         acc_cnt/tot_cnt,
         acc_cnt,
         tot_cnt,
     ))
-    return {"loss":loss_sum/len(ts_loader),'acc':acc_cnt/tot_cnt,'acc_cnt':acc_cnt,"total_cnt":tot_cnt}
+    return {"loss":loss_sum/len(ts_loader),'acc':acc_cnt/tot_cnt,'acc_cnt':acc_cnt,"total_cnt":tot_cnt,'metrics':ev_dict}
 
 # loggings
 log_tr = {"loss":[],"acc":[],"acc_cnt":[],"total_cnt":[]}
 log_ts = {"loss":[],"acc":[],"acc_cnt":[],"total_cnt":[]}
+ts_metrics = {}
 for e in range(args.epochs):
     tr_dict = train(e)
     for k,v in tr_dict.items():
@@ -166,14 +176,21 @@ for e in range(args.epochs):
         for k,v in ts_dict.items():
             if k in log_ts.keys():
                 log_ts[k].append(v)
+            elif k == "metrics":
+                for ek,evv in v.items():
+                    if ek not in ts_metrics.keys():
+                        ts_metrics[ek] = []
+                    ts_metrics[ek].append(evv)
+
 
 # Saving the results
 tr_df = pd.DataFrame.from_dict(log_tr)
 ts_df = pd.DataFrame.from_dict(log_ts)
+ev_df = pd.DataFrame.from_dict(ts_metrics)
 full_path = os.path.join(os.getcwd(),args.save_path)
 os.makedirs(full_path,exist_ok=True)
 fs_name = "transfer_ep{:}_bs{:}_sd{:}".format(args.epochs,args.batch_size,args.seed)
 with open(os.path.join(full_path,fs_name+".pkl"),'wb') as fid:
-    pickle.dump({"train":log_tr,"test":log_ts,'args':vars(args)},fid)
+    pickle.dump({"train":log_tr,"test":log_ts,'metrics':ev_df,'args':vars(args)},fid)
 
 print("Done!")
