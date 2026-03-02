@@ -24,44 +24,27 @@ parser.add_argument("--eval_freq",type=int,default=1,help="evaluation frequency,
 parser.add_argument("--lr",type=float,default=1e-4,help="learning rate of training")
 parser.add_argument("--seed",type=int,default=42,help="random seed for reproduction")
 parser.add_argument("--save_path",type=str,default="results_transfer",help="path/to/save/results")
+parser.add_argument("--model",type=str,default="inception",choices=["resnet","inception"],help="pretrained model to use")
+parser.add_argument("--load_args_from",type=str,default=None,help="path/to/pkl/file to load model choice from previous training")
 args = parser.parse_args()
 
-"""
-# inception
-preprocess = transforms.Compose([
-    transforms.Resize(299),
-    transforms.CenterCrop(299),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-])
-"""
-trs = transforms.Compose([
-    transforms.Resize(299),
-    transforms.CenterCrop(299),
-    transforms.RandomHorizontalFlip(p=0.5),
-    transforms.RandomVerticalFlip(p=0.5),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-])
-tss = transforms.Compose([
-    transforms.Resize(299),
-    transforms.CenterCrop(299),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-])
-"""
-trs = transforms.Compose([
-    transforms.Resize((540, 540)),
-    transforms.RandomHorizontalFlip(p=0.5),
-    transforms.RandomVerticalFlip(p=0.5),
-    transforms.ToTensor(),
-])
+# Load model choice from previous training arguments if provided
+if args.load_args_from is not None:
+    print(f"Loading arguments from {args.load_args_from}")
+    try:
+        with open(args.load_args_from, "rb") as fid:
+            saved_data = pickle.load(fid)
+            if "args" in saved_data:
+                saved_args = saved_data["args"]
+                if "model" in saved_args:
+                    args.model = saved_args["model"]
+                    print(f"Loaded model choice: {args.model}")
+            else:
+                print("Warning: 'args' key not found in saved file")
+    except Exception as e:
+        print(f"Error loading arguments from {args.load_args_from}: {e}")
 
-tss = transforms.Compose([
-    transforms.Resize((540, 540)),
-    transforms.ToTensor(),
-])
-"""
+trs, tss = uts.get_transforms(args.model)
 tr_set = ImageFolder(root=args.train_datapath, transform=trs)
 #print(len(tr_set))
 print("labels {:}".format(np.unique(tr_set.targets)))
@@ -104,7 +87,7 @@ ts_loader = DataLoader(ts_set,batch_size=args.batch_size,shuffle=False)
 
 device = uts.getDevice(False)
 #network = VanillaCnn(nclasses=len(dataset.classes)).to(device)
-network = PreFc(nclasses=len(ts_set.classes),premodel='inception').to(device)
+network = PreFc(nclasses=len(ts_set.classes),premodel=args.model).to(device)
 optimizer = torch.optim.Adam(params=network.parameters(),lr=args.lr)
 
 def train(ep):
