@@ -4,7 +4,8 @@ import os
 import torch
 import random
 import itertools
-import math 
+import math
+from torchvision import transforms 
 #from sklearn.metrics import normalized_mutual_info_score, v_measure_score, adjusted_rand_score, accuracy_score
 #from sklearn import cluster
 #from sklearn.preprocessing import Normalizer
@@ -50,3 +51,40 @@ def setup_seed(seed):
     torch.backends.cudnn.benchmark = False 
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+
+def get_transforms(model_name):
+    """Get model-specific image transformations.
+    
+    Args:
+        model_name: 'resnet' or 'inception'
+    
+    Returns:
+        tuple: (train_transforms, test_transforms)
+    """
+    imagenet_mean = [0.485, 0.456, 0.406]
+    imagenet_std = [0.229, 0.224, 0.225]
+    
+    if model_name == 'resnet':
+        size = 224
+    elif model_name == 'inception':
+        size = 299
+    else:
+        raise ValueError(f"Unknown model: {model_name}")
+    
+    trs = transforms.Compose([
+        transforms.Resize(size),
+        transforms.CenterCrop(size),
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomVerticalFlip(p=0.5),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=imagenet_mean, std=imagenet_std),
+    ])
+    
+    tss = transforms.Compose([
+        transforms.Resize(size),
+        transforms.CenterCrop(size),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=imagenet_mean, std=imagenet_std),
+    ])
+    
+    return trs, tss

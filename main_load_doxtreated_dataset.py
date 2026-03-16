@@ -23,48 +23,12 @@ parser.add_argument("--lr",type=float,default=1e-4,help="learning rate")
 parser.add_argument("--ev_freq",type=int,default=1,help="testing frequency in terms of number of epochs")
 parser.add_argument("--seed",type=int,default=42,help="random seed for reproduction")
 parser.add_argument("--split",type=float,default=0.9,help="train/test splitting ratio")
+parser.add_argument("--model",type=str,default="inception",choices=["resnet","inception"],help="pretrained model to use")
 
 #argv = sys.argv
 args = parser.parse_args()
 
-#folder_path = args.folder_path
-
-"""
-# inception
-preprocess = transforms.Compose([
-    transforms.Resize(299),
-    transforms.CenterCrop(299),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-])
-"""
-trs = transforms.Compose([
-    transforms.Resize(299),
-    transforms.CenterCrop(299),
-    transforms.RandomHorizontalFlip(p=0.5),
-    transforms.RandomVerticalFlip(p=0.5),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-])
-tss = transforms.Compose([
-    transforms.Resize(299),
-    transforms.CenterCrop(299),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-])
-"""
-trs = transforms.Compose([
-    transforms.Resize((540, 540)),
-    transforms.RandomHorizontalFlip(p=0.5),
-    transforms.RandomVerticalFlip(p=0.5),
-    transforms.ToTensor(),
-])
-
-tss = transforms.Compose([
-    transforms.Resize((540, 540)),
-    transforms.ToTensor(),
-])
-"""
+trs, tss = uts.get_transforms(args.model)
 dataset = ImageFolder(root=args.folder_path, transform=trs)
 #print(len(dataset))
 print("labels {:}".format(np.unique(dataset.targets)))
@@ -98,7 +62,8 @@ ts_loader = DataLoader(ts_set,batch_size=args.batch_size,shuffle=False)
 
 device = uts.getDevice(False)
 #network = VanillaCnn(nclasses=len(dataset.classes)).to(device)
-network = PreFc(nclasses=len(dataset.classes),premodel='inception').to(device)
+print("Using model: {:} to extract vision features".format(args.model))
+network = PreFc(nclasses=len(dataset.classes),premodel=args.model).to(device)
 optimizer = torch.optim.Adam(params=network.parameters(),lr=args.lr)
 
 def train(ep):

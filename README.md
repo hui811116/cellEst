@@ -1,46 +1,100 @@
 # cellEst
-Computer Vision and Deep Learning Based Senescent Cell Identification
+Computer Vision and Deep Learning–Based Senescent Cell Identification
 
 ## Overview
 
-- Data format: use PyImageJ to convert 16-bytes .tiff to RGB .tif images 
+This repository provides utilities for converting microscopy data into a format
+suitable for PyTorch and training deep models to distinguish senescent cells.
 
-- Dataset: we use pytorch built-in dataset utility ImageFolder to create dataset objects
+### Key Concepts
 
-- Algorithm: we leverage pre-trained models for visual feature extraction
+- **Data format** – Raw 16‑bit TIFF images are converted to RGB `.tif` using
+  PyImageJ utilities.
+- **Dataset handling** – We use `torchvision.datasets.ImageFolder` to build
+  datasets where each subfolder corresponds to a class label.
+- **Feature extraction** – Pre‑trained CNNs (ResNet or Inception) are used as
+  backbone extractors.
+- **Classifier** – Extracted features are fed to a small fully connected network
+  that produces logits for the target classes.
+- **Scripts provided**:
+  1. `main_load_doxtreated_dataset.py` – Splits a single image folder into
+     training and testing subsets, trains a model, and saves logs/arguments.
+  2. `main_transfer_test.py` – Performs transfer evaluation using separate
+     training and testing folders.
 
-- Classifier: the extracted features becomes the input to neural networks with output as the logits
+## Installation
 
-- Training/Testing: We provide to scripts:
-  1) main_load_doxtreated_dataset.py: spliting the same image folder into training and testing
-  2) main_transfer_test.py: two input arguments indicating the training and test datasets
+> _Assumes you have Python 3.8+ and PyTorch installed.  See `requirements.txt`
+> if provided._
+
+```bash
+pip install -r requirements.txt  # if available
+```
 
 ## Usage
 
-- Generate .tif RGB images
-  Assume a directory of raw images (16bytes .tiff) named "cells"
-  Suppose that the path to save the RGB images is named "merged_cells"
+### Preparing Data
+
+1. Convert raw TIFFs to RGB using `pyimageJ_batch_composite.py`:
+   ```sh
+   python pyimageJ_batch_composite.py cells merged_cells
+   ```
+2. (Optional) Generate channel–specific composites (nucleus or cytoskeleton):
+   ```sh
+   python script_pyimageJ_batch_chs.py cells chs_cells [nu/cy]
+   ```
+   where `nu` selects nucleus and `cy` selects cytoskeleton channels.
+
+### Training Scripts
+
+- **Split training/testing from one folder**
+  ```sh
+  python main_load_doxtreated_dataset.py /path/to/images [--options]
   ```
-  python pyimageJ_batch_composite.py cells merged_cells
+  This script will save a pickle file containing logs and the parsed
+  arguments (including the chosen pretrained model).
+
+- **Transfer evaluation with explicit folders**
+  ```sh
+  python main_transfer_test.py /path/to/train /path/to/test [--options]
   ```
-  In addition, if you want to generate channel specific RGB images, and want to store it to "chs_cells"
-  We provide two options: 1) nuclius and 2) cytoskeleton
-  ```
-  python script_pyimageJ_batch_chs.py cells chs_cells [nu/cy]
-  ```
-  the last argument will indicate which type of channel images to store. "nu" for nuclius and "cy" for cytoskeleton.
-- Run the scripts for training
-  1) Train/Test Split using the same dataset
-  ```
-  python main_load_doxtreated_dataset.py /path/to/image/folder [--options]
-  ```
-  3) Specify the directories for training and testing sets
-  ```
-  python main_transfer_test.py /path/to/training/images /path/to/testing/images [--options]
-  ```
-  You can see the options by runing the script without arguments.
-  * Please make sure that the folders (which will be treated as labels) in the /path/to/training/images and /path/to/testing/images are the same.
+  *Ensure that class subfolders exist in both train and test directories and
+  that their names match.*
+
+### Selecting the Pretrained Model
+
+Both scripts accept a `--model` flag with two choices:
+```
+--model {resnet,inception}
+```
+- `resnet` uses ResNet101 with 224×224 input size.
+- `inception` (default) uses Inception‑V3 with 299×299 input size.
+
+You can explicitly set the model at training time:
+```sh
+python main_load_doxtreated_dataset.py /data/images --model resnet
+```
+
+When running `main_transfer_test.py`, you can either specify the model again or
+load it from a previous training pickle:
+```sh
+python main_transfer_test.py train_dir test_dir --load_args_from
+    results_split/split_trts0.90_ep20_bs8_sd42.pkl
+```
+In the latter case the model choice stored in the saved arguments is applied
+automatically.
+
+To override a loaded model, simply include `--model` on the command line again.
+
+### Examining Options
+
+Run any script without arguments to view all available flags and defaults:
+```sh
+python main_load_doxtreated_dataset.py
+python main_transfer_test.py
+```
 
 ## Contact
-  Dr. Teng-Hui Huang
-  tenghui.huang@sydney.edu.au
+
+Dr. Teng‑Hui Huang  
+<tenghui.huang@sydney.edu.au>
