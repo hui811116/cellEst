@@ -139,5 +139,8 @@ fs_name = "split_trts{:.2f}_ep{:}_bs{:}_sd{:}".format(args.split,args.epochs,arg
 with open(os.path.join(save_path_full,fs_name+".pkl"),"wb") as fid:
     pickle.dump({"train":tr_logs_df,'test':ts_logs_df,'args':vars(args)},fid)
 
-# TODO: add model saving afterward
+# Save the trained model
+torch.save(network.state_dict(), os.path.join(save_path_full, fs_name + "_model.pth"))
+print("Model saved to:", os.path.join(save_path_full, fs_name + "_model.pth"))
+
 print("Done!")
