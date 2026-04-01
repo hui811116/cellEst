@@ -78,3 +78,24 @@ class PreFc(nn.Module):
     def forward(self,x):
         x_ex = self.extract(x)
         return self.classifier(x_ex)
+
+
+class gradCla(nn.Module):
+    def __init__(self,nclasses):
+        super(gradCla,self).__init__()
+        self.backbone = resnet101(weights="DEFAULT")
+        for param in self.backbone.parameters():
+            param.require_grads = False
+        # replace the fc layer with a new one
+        in_features = self.backbone.fc.in_features
+        self.backbone.fc = nn.Sequential(
+            nn.Linear(in_features,512),
+            nn.Dropout(p=0.1),
+            nn.ReLU(),
+            nn.Linear(512,nclasses),
+        )
+        for param in self.backbone.fc.parameters():
+            param.require_grads = True
+    def forward(self,x):
+        return self.backbone(x)
+

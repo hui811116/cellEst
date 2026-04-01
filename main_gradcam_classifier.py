@@ -8,26 +8,29 @@ import torchvision
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
 from torch.utils.data import DataLoader, random_split
-from networks import VanillaCnn,PreFc
+from networks import gradCla
 import torch.nn as nn
 import myutils as uts
 import argparse
 import time
+from pytorch_grad_cam import GradCAM
+from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
+from pytorch_grad_cam.utils.image import show_cam_on_image
 
 parser = argparse.ArgumentParser()
 parser.add_argument("folder_path",type=str,help="path/to/image/folder")
 parser.add_argument("--save_path",type=str,default="results_split",help="path/to/save/results")
-parser.add_argument("--epochs",type=int,default=20,help='number of epochs for training')
+parser.add_argument("--epochs",type=int,default=5,help='number of epochs for training')
 parser.add_argument("--batch_size",type=int,default=8,help="minibatch size for training")
 parser.add_argument("--lr",type=float,default=1e-4,help="learning rate")
 parser.add_argument("--ev_freq",type=int,default=1,help="testing frequency in terms of number of epochs")
 parser.add_argument("--seed",type=int,default=42,help="random seed for reproduction")
 parser.add_argument("--split",type=float,default=0.9,help="train/test splitting ratio")
-parser.add_argument("--model",type=str,default="inception",choices=["resnet","inception"],help="pretrained model to use")
+#parser.add_argument("--model",type=str,default="inception",choices=["resnet","inception"],help="pretrained model to use")
 
 args = parser.parse_args()
 
-trs, tss = uts.get_transforms(args.model)
+trs, tss = uts.get_transforms("resnet") # FIXME: when adding more pretrained models, this should be modified to support different transforms for different models
 dataset = ImageFolder(root=args.folder_path, transform=trs)
 print("labels {:}".format(np.unique(dataset.targets)))
 print(dataset.classes)
@@ -53,8 +56,9 @@ tr_loader = DataLoader(tr_set,batch_size=args.batch_size,shuffle=True,drop_last=
 ts_loader = DataLoader(ts_set,batch_size=args.batch_size,shuffle=False)
 
 device = uts.getDevice(False)
-print("Using model: {:} to extract vision features".format(args.model))
-network = PreFc(nclasses=len(dataset.classes),premodel=args.model).to(device)
+print("Using model: {:} to extract vision features".format("resnet101")) # FIXME: when adding more pretrained models, this should be modified to support different models
+
+network = gradCla(nclasses=len(dataset.classes)).to(device)
 optimizer = torch.optim.Adam(params=network.parameters(),lr=args.lr)
 
 def train(ep):
@@ -118,13 +122,46 @@ for e in range(args.epochs):
             if kt in logs_ts.keys():
                 logs_ts[kt].append(vt)
 
+network.eval()
+for param in network.parameters():
+    param.require_grads = True
+
+# loading images to process with gradcam
+#input_tensor = torch.zeros((1,3,224,224)).to(device) # dummy input, replace with actual image tensor
+rnd_idx = np.random.randint(0,len(ts_set)) # random batch index, replace with specific index if needed
+input_tensor, _ = ts_set[rnd_idx] # get the first image from the test set
+input_tensor = input_tensor.unsqueeze(0).to(device) # add batch dimension and move to device
+
+target_layers = [network.backbone.layer4[-1]]
+cam = GradCAM(model=network, target_layers=target_layers)
+
+targets=[ClassifierOutputTarget(1)] # senescent cells
+# generate heapmap
+grayscale_cam = cam(input_tensor=input_tensor, targets=targets)
+grayscale_cam = grayscale_cam[0, :]
+# visualize the heatmap
+rgb_img = input_tensor.cpu().numpy().transpose(0,2,3,1)[0] # convert to HWC format, first image index is 0 since we only have one image in the batch
+# reverse the normalization (assuming ImageNet normalization)
+# use the resnet mean and std for denormalization, this should be modified if using different pretrained models with different normalization
+mean = np.array([0.485, 0.456, 0.406])
+std = np.array([0.229, 0.224, 0.225])
+rgb_img = std * rgb_img + mean
+rgb_img = np.clip(rgb_img, 0, 1) # clip to [0,1] range
+visualization = show_cam_on_image(rgb_img, grayscale_cam, use_rgb=True)
+# display the visualization
+import matplotlib.pyplot as plt
+plt.imshow(visualization)
+plt.axis('off')
+plt.show()
+
+# saving the miscillaneous results
 tr_logs_df = pd.DataFrame.from_dict(logs_tr)
 ts_logs_df = pd.DataFrame.from_dict(logs_ts)
 # saving the training logs
 save_path_full = os.path.join(os.getcwd(),args.save_path)
 os.makedirs(save_path_full,exist_ok=True)
 print("Saving logs")
-fs_name = "split_trts{:.2f}_ep{:}_bs{:}_sd{:}".format(args.split,args.epochs,args.batch_size,args.seed)
+fs_name = "gradcla_split_trts{:.2f}_ep{:}_bs{:}_sd{:}".format(args.split,args.epochs,args.batch_size,args.seed)
 
 with open(os.path.join(save_path_full,fs_name+".pkl"),"wb") as fid:
     pickle.dump({"train":tr_logs_df,'test':ts_logs_df,'args':vars(args)},fid)
