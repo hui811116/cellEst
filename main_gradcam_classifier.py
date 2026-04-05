@@ -55,6 +55,7 @@ print("Train dataset size:{:}, Test dataset size:{:}".format(len(tr_set),len(ts_
 tr_loader = DataLoader(tr_set,batch_size=args.batch_size,shuffle=True,drop_last=True)
 ts_loader = DataLoader(ts_set,batch_size=args.batch_size,shuffle=False)
 
+
 device = uts.getDevice(False)
 print("Using model: {:} to extract vision features".format("resnet101")) # FIXME: when adding more pretrained models, this should be modified to support different models
 
@@ -67,6 +68,7 @@ def train(ep):
     acc_cnt = 0
     tot_cnt = 0
     cr_loss = nn.CrossEntropyLoss(reduction='sum')
+    t_start = time.perf_counter()
     for bi, (X,Y) in enumerate(tr_loader):
         optimizer.zero_grad()
         X = X.to(device)
@@ -78,12 +80,14 @@ def train(ep):
         loss_sum += loss.item()
         acc_cnt += (llr_out.argmax(dim=1)== Y).sum().item()
         tot_cnt += len(Y)
-    print("Epochs {:}, loss={:.5f}, acc={:.5f}({:}/{:})".format(
+    t_end = time.perf_counter()
+    print("Epochs {:}, loss={:.5f}, acc={:.5f}({:}/{:}), time={:.2f}s".format(
         ep,
         loss_sum/len(tr_loader),
         acc_cnt/tot_cnt,
         acc_cnt,
-        tot_cnt))
+        tot_cnt,
+        t_end - t_start))
     return {"loss":loss_sum/len(tr_loader),"acc":acc_cnt/tot_cnt,"acc_cnt":acc_cnt,"total_cnt":tot_cnt}
 
 def test():
@@ -91,6 +95,7 @@ def test():
     acc_cnt = 0
     tot_cnt = 0
     cr_loss = nn.CrossEntropyLoss(reduction='sum')
+    t_start = time.perf_counter()
     for bi, (X,Y) in enumerate(ts_loader):
         X = X.to(device)
         Y = Y.to(device)
@@ -100,11 +105,13 @@ def test():
         loss_sum += loss.item()
         acc_cnt += (llr_out.argmax(dim=1) == Y).sum().item()
         tot_cnt += len(Y)
-    print("Testing: loss={:.5f}, Accuracy:{:.5f}({:}/{:})".format(
+    t_end = time.perf_counter()
+    print("Testing: loss={:.5f}, Accuracy:{:.5f}({:}/{:}), time={:.2f}s".format(
         loss_sum/len(ts_loader),
         acc_cnt/tot_cnt,
         acc_cnt,
         tot_cnt,
+        t_end - t_start
     ))
     return {"loss":loss_sum/len(ts_loader),'acc':acc_cnt/tot_cnt,'acc_cnt':acc_cnt,'total_cnt':tot_cnt}
 
@@ -128,8 +135,11 @@ for param in network.parameters():
 
 # loading images to process with gradcam
 #input_tensor = torch.zeros((1,3,224,224)).to(device) # dummy input, replace with actual image tensor
-rnd_idx = np.random.randint(0,len(ts_set)) # random batch index, replace with specific index if needed
+#rnd_idx = np.random.randint(0,len(ts_set)) # random batch index, replace with specific index if needed
+rnd_idx = 0 # replace with specific index if needed
 input_tensor, _ = ts_set[rnd_idx] # get the first image from the test set
+test_image_path = ts_set.dataset.samples[ts_set.indices[rnd_idx]][0] # get the path of the test image
+
 input_tensor = input_tensor.unsqueeze(0).to(device) # add batch dimension and move to device
 
 target_layers = [network.backbone.layer4[-1]]
@@ -150,9 +160,11 @@ rgb_img = np.clip(rgb_img, 0, 1) # clip to [0,1] range
 visualization = show_cam_on_image(rgb_img, grayscale_cam, use_rgb=True)
 # display the visualization
 import matplotlib.pyplot as plt
-plt.imshow(visualization)
-plt.axis('off')
-plt.show()
+#plt.imshow(visualization)
+# show the path as title
+#plt.title(test_image_path)
+#plt.axis('off')
+#plt.show()
 
 # saving the miscillaneous results
 tr_logs_df = pd.DataFrame.from_dict(logs_tr)
