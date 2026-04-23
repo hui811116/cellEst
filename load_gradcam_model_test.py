@@ -1,20 +1,24 @@
-import numpy as np
+"""Main loading script for gradcam visualization"""
 import os
+import pickle
+import argparse
+import numpy as np
+from pathlib import Path
 import torch
 from torchvision.datasets import ImageFolder
-from torch.utils.data import DataLoader, random_split
-from networks import gradCla
-import myutils as uts
-import argparse
+from torch.utils.data import random_split
 from pytorch_grad_cam import GradCAM
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 from pytorch_grad_cam.utils.image import show_cam_on_image
 import matplotlib.pyplot as plt
+from networks import GradCla
+import myutils as uts
 
 parser = argparse.ArgumentParser()
 parser.add_argument("folder_path", type=str, help="path/to/image/folder")
 parser.add_argument("model_path", type=str, help="path/to/trained/model.pth")
-parser.add_argument("--save_path", type=str, default="gradCam_processed", help="path/to/save/processed/images")
+parser.add_argument("--save_path", type=str, default="gradCam_processed", 
+                    help="path/to/save/processed/images")
 parser.add_argument("--seed", type=int, default=42, help="random seed for reproduction")
 parser.add_argument("--split", type=float, default=0.9, help="train/test splitting ratio")
 
@@ -24,7 +28,7 @@ args = parser.parse_args()
 os.makedirs(args.save_path, exist_ok=True)
 
 # Transforms and Dataset
-trs, tss = uts.get_transforms("resnet")
+trs, tss = uts.get_transforms("resnet") # will support more pretrained model [fixme]
 dataset = ImageFolder(root=args.folder_path, transform=trs)
 
 # Seed for deterministic splitting (must match training exactly)
@@ -46,7 +50,14 @@ device = uts.getDevice(False)
 
 # Load Model
 print(f"Loading model from {args.model_path}")
-network = gradCla(nclasses=len(dataset.classes)).to(device)
+# get the .pkl file that contains arguments needed for reproduction
+with open(Path(args.model_path).with_suffix(".pkl"),"rb") as fid:
+    mdl_pkl = pickle.load(fid)
+mdl_args = argparse.Namespace(**mdl_pkl["args"])
+print(mdl_args)
+network = GradCla(nclasses=len(dataset.classes),
+                  premodel="resnet", # will support more pretrained model [fixme]
+                  classifier_type=mdl_args.classifier_type).to(device)
 network.load_state_dict(torch.load(args.model_path, map_location=device))
 network.eval()
 

@@ -41,9 +41,31 @@ pip install -r requirements.txt  # if available
    ```
 2. (Optional) Generate channel–specific composites (nucleus or cytoskeleton):
    ```sh
-   python script_pyimageJ_batch_chs.py cells chs_cells [nu/cy]
+   python script_pyimageJ_batch_chs.py cells chs_cells [nu/cy] [--recursive]
    ```
-   where `nu` selects nucleus and `cy` selects cytoskeleton channels.
+   where `nu` selects nucleus and `cy` selects cytoskeleton channels. 
+   Include the `--recursive` flag to search for TIFF files recursively in subfolders.
+
+   **Example Folder Structures:**
+
+   *Without `--recursive`* (Images directly in the load folder):
+   ```text
+   cells/
+   ├── r01c01-ch1.tiff
+   ├── r01c01-ch2.tiff
+   └── ...
+   ```
+
+   *With `--recursive`* (Images inside nested subfolders):
+   ```text
+   cells/
+   ├── Day1/
+   │   ├── r02c01-ch1.tiff
+   │   └── r02c01-ch2.tiff
+   └── Day2/
+       ├── r03c01-ch1.tiff
+       └── r03c01-ch2.tiff
+   ```
 
 ### Training Scripts
 
