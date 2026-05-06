@@ -21,6 +21,8 @@ parser.add_argument("--save_path", type=str, default="gradCam_processed",
                     help="path/to/save/processed/images")
 parser.add_argument("--seed", type=int, default=42, help="random seed for reproduction")
 parser.add_argument("--split", type=float, default=0.9, help="train/test splitting ratio")
+parser.add_argument("--threshold", type=float, default=0.5, 
+                    help="Threshold for the GradCAM contour")
 
 args = parser.parse_args()
 
@@ -32,7 +34,7 @@ trs, tss = uts.get_transforms("resnet") # will support more pretrained model [fi
 dataset = ImageFolder(root=args.folder_path, transform=trs)
 
 # Seed for deterministic splitting (must match training exactly)
-print("Setting random seed to:{:}".format(args.seed))
+print(f"Setting random seed to:{args.seed}")
 uts.setup_seed(args.seed)
 
 # Splitting dataset to get the exact same test set
@@ -44,7 +46,7 @@ tr_set, ts_set = random_split(dataset, [ntrain, ndata - ntrain])
 # Apply test transforms to the test set
 ts_set.dataset.transform = tss
 
-print("Test dataset size:{:}".format(len(ts_set)))
+print(f"Test dataset size:{len(ts_set)}")
 
 device = uts.getDevice(False)
 
@@ -75,7 +77,7 @@ if 'senescent' in dataset.class_to_idx:
 else:
     print("Warning: 'senescent' class not found in dataset. Defaulting to index 1.")
     senescent_idx = 1
-    
+
 targets = [ClassifierOutputTarget(senescent_idx)]
 print(f"Generating GradCAM for '{dataset.classes[senescent_idx]}' class (index {senescent_idx}).")
 
@@ -84,51 +86,45 @@ mean = np.array([0.485, 0.456, 0.406])
 std = np.array([0.229, 0.224, 0.225])
 
 # Process all images in the test set
-for rnd_idx in range(len(ts_set)):
-    input_tensor, true_label = ts_set[rnd_idx]
-    
+#for rnd_idx in range(len(ts_set)):
+for rnd_idx, (input_tensor, true_label) in enumerate(ts_set):
+    #input_tensor, true_label = ts_set[rnd_idx]
     # Get original file path to use its name for saving
     original_path = ts_set.dataset.samples[ts_set.indices[rnd_idx]][0]
     filename = os.path.basename(original_path)
-    
     # Add batch dimension
     input_tensor_batch = input_tensor.unsqueeze(0).to(device)
-    
     # Generate heatmap
     grayscale_cam = cam(input_tensor=input_tensor_batch, targets=targets)
     grayscale_cam = grayscale_cam[0, :]
-    
     # Convert tensor back to image format (HWC) for visualization
     rgb_img = input_tensor.cpu().numpy().transpose(1, 2, 0)
-    
     # Reverse the normalization
     rgb_img = std * rgb_img + mean
     rgb_img = np.clip(rgb_img, 0, 1)
-    
     # Overlay heatmap on image
-    visualization = show_cam_on_image(rgb_img, grayscale_cam, use_rgb=True)
-    
+    #visualization = show_cam_on_image(rgb_img, grayscale_cam, use_rgb=True)
     # Predict the label
     with torch.no_grad():
         output = network(input_tensor_batch)
         pred_label = output.argmax(dim=1).item()
-        
     true_class_name = dataset.classes[true_label]
     pred_class_name = dataset.classes[pred_label]
 
     # Save the resulting image
     save_file = os.path.join(args.save_path, f"gradcam_{filename}.tiff")
-    
     # Create figure with title
     fig, ax = plt.subplots(figsize=(6, 6))
-    ax.imshow(visualization)
+    #ax.imshow(visualization)
+    ax.imshow(rgb_img)
+    ax.contour(grayscale_cam, levels=[args.threshold], colors='red')
     ax.set_title(f"True: {true_class_name} | Pred: {pred_class_name}")
     ax.axis('off')
-    
+
     # Save figure
     fig.savefig(save_file, bbox_inches='tight', pad_inches=0.1)
     plt.close(fig)
-    
+
     if (rnd_idx + 1) % 10 == 0:
         print(f"Processed {rnd_idx + 1}/{len(ts_set)} images...")
 

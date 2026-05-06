@@ -31,150 +31,159 @@ parser.add_argument('--classifier_type',type=str,choices=['mlp','linear'],defaul
                     help="Choose classifier type")
 args = parser.parse_args()
 
-trs, tss = uts.get_transforms("resnet")
-dataset = ImageFolder(root=args.folder_path, transform=trs)
-print(f"labels {np.unique(dataset.targets)}")
-print(dataset.classes)
-
-# seed
-d_seed = args.seed
-print(f"Setting random seed to:{d_seed}")
-uts.setup_seed(d_seed)
-
-ndata = len(dataset)
-train_test_split = args.split
-ntrain = int(ndata * train_test_split)
-tr_set,ts_set = random_split(dataset,[ntrain , ndata - ntrain])
-ts_set.dataset.transform = tss
-
-print("Train dataset size:{:}, Test dataset size:{:}".format(len(tr_set),len(ts_set)))
-
-tr_loader = DataLoader(tr_set,batch_size=args.batch_size,shuffle=True,drop_last=True)
-ts_loader = DataLoader(ts_set,batch_size=args.batch_size,shuffle=False)
-
-
-device = uts.getDevice(False)
-# We should change to support multiple premodel [fixme]
-print("Using model: resnet101 to extract vision features") 
-
-network = GradCla(nclasses=len(dataset.classes),
-                  premodel="resnet",
-                  classifier_type=args.classifier_type).to(device)
-optimizer = torch.optim.Adam(params=network.parameters(),lr=args.lr)
-
-def train(ep):
+def train(model,dataloader,optimizer,device,epochs):
     """Training loop"""
-    network.train()
-    loss_sum = 0
-    acc_cnt = 0
-    tot_cnt = 0
-    cr_loss = nn.CrossEntropyLoss(reduction='sum')
-    t_start = time.perf_counter()
-    for _, (x_img,y_label) in enumerate(tr_loader):
-        optimizer.zero_grad()
-        x_img = x_img.to(device)
-        y_label = y_label.to(device)
-        llr_out = network(x_img)
-        loss = cr_loss(llr_out,y_label)
-        loss.backward()
-        optimizer.step()
-        loss_sum += loss.item()
-        acc_cnt += (llr_out.argmax(dim=1)== y_label).sum().item()
-        tot_cnt += len(y_label)
-    t_end = time.perf_counter()
-    print("Epochs {:}, loss={:.5f}, acc={:.5f}({:}/{:}), time={:.2f}s".format(
-        ep,
-        loss_sum/len(tr_loader),
-        acc_cnt/tot_cnt,
-        acc_cnt,
-        tot_cnt,
-        t_end - t_start))
-    return {"loss":loss_sum/len(tr_loader),"acc":acc_cnt/tot_cnt,"acc_cnt":acc_cnt,"total_cnt":tot_cnt}
+    tr_logs = {"loss":[],"acc":[],"acc_cnt":[],"total_cnt":[]}
 
-def test():
+    def train_step(ep):
+        """Training loop"""
+        model.train()
+        loss_sum = 0
+        acc_cnt = 0
+        tot_cnt = 0
+        cr_loss = nn.CrossEntropyLoss(reduction='sum')
+        t_start = time.perf_counter()
+        for _, (x_img,y_label) in enumerate(dataloader):
+            optimizer.zero_grad()
+            x_img = x_img.to(device)
+            y_label = y_label.to(device)
+            llr_out = model(x_img)
+            loss = cr_loss(llr_out,y_label)
+            loss.backward()
+            optimizer.step()
+            loss_sum += loss.item()
+            acc_cnt += (llr_out.argmax(dim=1)== y_label).sum().item()
+            tot_cnt += len(y_label)
+        t_end = time.perf_counter()
+
+        print(f"Epochs {ep}, loss={loss_sum/len(dataloader):.5f},",
+              f" acc={acc_cnt/tot_cnt:.5f}({acc_cnt}/{tot_cnt}),",
+              f" time={t_end - t_start:.2f}s")
+        return {"loss":loss_sum/len(dataloader),"acc":acc_cnt/tot_cnt,
+                "acc_cnt":acc_cnt,"total_cnt":tot_cnt}
+    for e in range(epochs):
+        #tr_logs.append(train_step(e))
+        logs = train_step(e)
+        for k,v in logs.items():
+            if k in tr_logs:
+                tr_logs[k].append(v)
+    return tr_logs
+
+
+def test(model,dataloader,device):
     """Testing loop"""
+    model.eval()
     loss_sum = 0
     acc_cnt = 0
     tot_cnt = 0
     cr_loss = nn.CrossEntropyLoss(reduction='sum')
     t_start = time.perf_counter()
-    for _, (x_img,y_label) in enumerate(ts_loader):
+    for _, (x_img,y_label) in enumerate(dataloader):
         x_img = x_img.to(device)
         y_label = y_label.to(device)
         with torch.inference_mode():
-            llr_out = network(x_img)
+            llr_out = model(x_img)
         loss = cr_loss(llr_out,y_label)
         loss_sum += loss.item()
         acc_cnt += (llr_out.argmax(dim=1) == y_label).sum().item()
         tot_cnt += len(y_label)
     t_end = time.perf_counter()
-    print("Testing: loss={:.5f}, Accuracy:{:.5f}({:}/{:}), time={:.2f}s".format(
-        loss_sum/len(ts_loader),
-        acc_cnt/tot_cnt,
-        acc_cnt,
-        tot_cnt,
-        t_end - t_start
-    ))
-    return {"loss":loss_sum/len(ts_loader),'acc':acc_cnt/tot_cnt,'acc_cnt':acc_cnt,'total_cnt':tot_cnt}
+    print(f"Testing: loss={loss_sum/len(dataloader):.5f},",
+          f" Accuracy:{acc_cnt/tot_cnt:.5f}({acc_cnt}/{tot_cnt}),",
+          f" time={t_end-t_start:.2f}s")
+    return {"loss":loss_sum/len(dataloader),'acc':acc_cnt/tot_cnt,
+            'acc_cnt':acc_cnt,'total_cnt':tot_cnt}
 
-logs_tr = {"loss":[],"acc":[],"acc_cnt":[],"total_cnt":[]}
-logs_ts = {"loss":[],"acc":[],"acc_cnt":[],"total_cnt":[]}
-for e in range(args.epochs):
-    tr_log = train(e)
-    # FIXME: simplify this block as stacks of for loops are not easy to follow
-    for k,v in tr_log.items():
-        if k in logs_tr:
-            logs_tr[k].append(v)
-    if (e+1)%args.ev_freq == 0 or (e+1) == args.epochs: # last epoch must test
-        ts_log = test()
-        for kt,vt in ts_log.items():
-            if kt in logs_ts:
-                logs_ts[kt].append(vt)
+def main(arg):
+    """Main function"""
+    trs, tss = uts.get_transforms("resnet")
+    dataset = ImageFolder(root=arg.folder_path, transform=trs)
+    print(f"labels {np.unique(dataset.targets)}")
+    print(dataset.classes)
 
-network.eval()
-for param in network.parameters():
-    param.require_grads = True
+    # seed
+    d_seed = arg.seed
+    print(f"Setting random seed to:{d_seed}")
+    uts.setup_seed(d_seed)
 
-# loading images to process with gradcam
-rnd_idx = 0 # replace with specific index if needed
-input_tensor, _ = ts_set[rnd_idx] # get the first image from the test set
-test_image_path = ts_set.dataset.samples[ts_set.indices[rnd_idx]][0] # get the path of the test image
+    ndata = len(dataset)
+    train_test_split = arg.split
+    ntrain = int(ndata * train_test_split)
+    tr_set,ts_set = random_split(dataset,[ntrain , ndata - ntrain])
+    ts_set.dataset.transform = tss
 
-input_tensor = input_tensor.unsqueeze(0).to(device) # add batch dimension and move to device
+    print(f"Train dataset size:{len(tr_set)}, Test dataset size:{len(ts_set)}")
 
-target_layers = [network.backbone.layer4[-1]]
-cam = GradCAM(model=network, target_layers=target_layers)
+    tr_loader = DataLoader(tr_set,batch_size=arg.batch_size,shuffle=True,drop_last=True)
+    ts_loader = DataLoader(ts_set,batch_size=arg.batch_size,shuffle=False)
 
-targets=[ClassifierOutputTarget(1)] # senescent cells
-# generate heapmap
-grayscale_cam = cam(input_tensor=input_tensor, targets=targets)
-grayscale_cam = grayscale_cam[0, :]
-# visualize the heatmap
-rgb_img = input_tensor.cpu().numpy().transpose(0,2,3,1)[0] # convert to HWC format, first image index is 0 since we only have one image in the batch
-# reverse the normalization (assuming ImageNet normalization)
-# use the resnet mean and std for denormalization, this should be 
-# modified if using different pretrained models with different normalization
-mean = np.array([0.485, 0.456, 0.406])
-std = np.array([0.229, 0.224, 0.225])
-rgb_img = std * rgb_img + mean
-rgb_img = np.clip(rgb_img, 0, 1) # clip to [0,1] range
-visualization = show_cam_on_image(rgb_img, grayscale_cam, use_rgb=True)
-# display the visualization
 
-# saving the miscillaneous results
-tr_logs_df = pd.DataFrame.from_dict(logs_tr)
-ts_logs_df = pd.DataFrame.from_dict(logs_ts)
-# saving the training logs
-save_path_full = os.path.join(os.getcwd(),args.save_path)
-os.makedirs(save_path_full,exist_ok=True)
-print("Saving logs")
-fs_name = f"gradcla_{args.classifier_type}" \
-          f"_trts{args.split:.2f}_ep{args.epochs}_bs{args.batch_size}_sd{args.seed}"
+    device = uts.getDevice(False)
+    # We should change to support multiple premodel [fixme]
+    print("Using model: resnet101 to extract vision features") 
 
-with open(os.path.join(save_path_full,fs_name+".pkl"),"wb") as fid:
-    pickle.dump({"train":tr_logs_df,'test':ts_logs_df,'args':vars(args)},fid)
+    network = GradCla(nclasses=len(dataset.classes),
+                    premodel="resnet",
+                    classifier_type=arg.classifier_type).to(device)
+    optimizer = torch.optim.Adam(params=network.parameters(),lr=arg.lr)
 
-# Save the trained model
-torch.save(network.state_dict(), os.path.join(save_path_full, fs_name + ".pth"))
-print("Model saved to:", os.path.join(save_path_full, fs_name + ".pth"))
-print("Done!")
+    # Classifier training and testing
+    logs_tr = train(network,tr_loader,optimizer,device, arg.epochs)
+    logs_ts = test(network,ts_loader,device)
+
+    # grad cam preparation
+    #network.eval()
+    #for param in network.parameters():
+    #    param.require_grads = True
+
+    # loading images to process with gradcam
+    #rnd_idx = 0 # replace with specific index if needed
+    #input_tensor, _ = ts_set[rnd_idx] # get the first image from the test set
+    #test_image_path = ts_set.dataset.samples[ts_set.indices[rnd_idx]][0] # get the path of the test image
+
+    #input_tensor = input_tensor.unsqueeze(0).to(device) # add batch dimension and move to device
+
+    #target_layers = [network.backbone.layer4[-1]]
+    #cam = GradCAM(model=network, target_layers=target_layers)
+
+    #targets=[ClassifierOutputTarget(1)] # senescent cells
+    # generate heapmap
+    #grayscale_cam = cam(input_tensor=input_tensor, targets=targets)
+    #grayscale_cam = grayscale_cam[0, :]
+    # visualize the heatmap
+    #rgb_img = input_tensor.cpu().numpy().transpose(0,2,3,1)[0] # convert to HWC format, first image index is 0 since we only have one image in the batch
+    # reverse the normalization (assuming ImageNet normalization)
+    # use the resnet mean and std for denormalization, this should be
+    # modified if using different pretrained models with different normalization
+    #mean = np.array([0.485, 0.456, 0.406])
+    #std = np.array([0.229, 0.224, 0.225])
+    #rgb_img = std * rgb_img + mean
+    #rgb_img = np.clip(rgb_img, 0, 1) # clip to [0,1] range
+    #visualization = show_cam_on_image(rgb_img, grayscale_cam, use_rgb=True)
+    # display the visualization
+
+    # saving the miscillaneous results
+    tr_logs_df = pd.DataFrame.from_dict(logs_tr)
+    ts_logs_df = pd.DataFrame.from_dict(logs_ts)
+    # saving the training logs
+    save_path_full = os.path.join(os.getcwd(),args.save_path)
+    os.makedirs(save_path_full,exist_ok=True)
+    print("Saving logs")
+    fs_name = f"gradcla_{args.classifier_type}" \
+            f"_trts{args.split:.2f}_ep{args.epochs}_bs{args.batch_size}_sd{args.seed}"
+
+    with open(os.path.join(save_path_full,fs_name+".pkl"),"wb") as fid:
+        pickle.dump({"train":tr_logs_df,'test':ts_logs_df,'args':vars(args)},fid)
+
+    # Save the trained model
+    torch.save(network.state_dict(), os.path.join(save_path_full, fs_name + ".pth"))
+    print("Model saved to:", os.path.join(save_path_full, fs_name + ".pth"))
+    print("Done!")
+
+
+
+if __name__ == "__main__":
+    #GradCam supported classifier training script
+    # take parsed arguments including training information and paths
+    # output a trained model and a pickle file with the training arguments for reproduction
+    main(args)
