@@ -62,11 +62,15 @@ jobs:
           print("Test data created.")
           EOF
 
-      - name: Step 1 - Pre-process test images
+      - name: Step 1 - Run regression tests
+        run: |
+          python -m pytest -q test_main_gradcam_classifier.py
+
+      - name: Step 2 - Pre-process test images
         run: |
           python script_pyimageJ_batch_chs.py test_data/raw test_data/processed nu --recursive
 
-      - name: Step 2 - Train model
+      - name: Step 3 - Train model
         run: |
           # Using minimal epochs and a small batch size for a quick CI run.
           python main_gradcam_classifier.py test_data/processed \
@@ -74,7 +78,7 @@ jobs:
             --epochs 1 \
             --batch_size 1
 
-      - name: Step 3 - Run Grad-CAM visualization
+      - name: Step 4 - Run Grad-CAM visualization
         run: |
           python load_gradcam_model_test.py test_data/processed \
             ci_results/gradcla_mlp_trts0.90_ep1_bs1_sd42.pth \

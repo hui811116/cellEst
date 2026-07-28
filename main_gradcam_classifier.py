@@ -29,7 +29,22 @@ parser.add_argument("--seed",type=int,default=42,help="random seed for reproduct
 parser.add_argument("--split",type=float,default=0.9,help="train/test splitting ratio")
 parser.add_argument('--classifier_type',type=str,choices=['mlp','linear'],default="mlp",
                     help="Choose classifier type")
-args = parser.parse_args()
+
+
+def parse_args():
+    """Parse command-line arguments."""
+    return parser.parse_args()
+
+
+def to_log_dataframe(logs):
+    """Convert training/test logs to a DataFrame for both scalar and list values."""
+    if not logs:
+        return pd.DataFrame()
+
+    if all(np.isscalar(v) for v in logs.values()):
+        return pd.DataFrame([logs])
+
+    return pd.DataFrame(logs)
 
 def train(model,dataloader,optimizer,device,epochs):
     """Training loop"""
@@ -163,17 +178,17 @@ def main(arg):
     # display the visualization
 
     # saving the miscillaneous results
-    tr_logs_df = pd.DataFrame.from_dict(logs_tr)
-    ts_logs_df = pd.DataFrame.from_dict(logs_ts)
+    tr_logs_df = to_log_dataframe(logs_tr)
+    ts_logs_df = to_log_dataframe(logs_ts)
     # saving the training logs
-    save_path_full = os.path.join(os.getcwd(),args.save_path)
+    save_path_full = os.path.join(os.getcwd(),arg.save_path)
     os.makedirs(save_path_full,exist_ok=True)
     print("Saving logs")
-    fs_name = f"gradcla_{args.classifier_type}" \
-            f"_trts{args.split:.2f}_ep{args.epochs}_bs{args.batch_size}_sd{args.seed}"
+    fs_name = f"gradcla_{arg.classifier_type}" \
+            f"_trts{arg.split:.2f}_ep{arg.epochs}_bs{arg.batch_size}_sd{arg.seed}"
 
     with open(os.path.join(save_path_full,fs_name+".pkl"),"wb") as fid:
-        pickle.dump({"train":tr_logs_df,'test':ts_logs_df,'args':vars(args)},fid)
+        pickle.dump({"train":tr_logs_df,'test':ts_logs_df,'args':vars(arg)},fid)
 
     # Save the trained model
     torch.save(network.state_dict(), os.path.join(save_path_full, fs_name + ".pth"))
@@ -186,4 +201,4 @@ if __name__ == "__main__":
     #GradCam supported classifier training script
     # take parsed arguments including training information and paths
     # output a trained model and a pickle file with the training arguments for reproduction
-    main(args)
+    main(parse_args())
