@@ -32,6 +32,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install numpy pandas matplotlib scikit-image pyimagej grad-cam
+          pip install pytest
           # The first run of pyimagej will download Fiji, which we cache.
           python -c "import imagej; imagej.init('sc.fiji:fiji')"
 
