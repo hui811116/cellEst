@@ -31,7 +31,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-          pip install numpy pandas matplotlib scikit-image pyimagej pytorch-grad-cam
+          pip install numpy pandas matplotlib scikit-image pyimagej grad-cam
           # The first run of pyimagej will download Fiji, which we cache.
           python -c "import imagej; imagej.init('sc.fiji:fiji')"
 
@@ -46,19 +46,19 @@ jobs:
           from skimage.io import imsave
 
           # Create directory structure for ImageFolder
-          os.makedirs("test_data/raw/class_A", exist_ok=True)
-          os.makedirs("test_data/raw/class_B", exist_ok=True)
-          os.makedirs("test_data/processed/class_A", exist_ok=True)
-          os.makedirs("test_data/processed/class_B", exist_ok=True)
+          os.makedirs("test_data/raw/senescent", exist_ok=True)
+          os.makedirs("test_data/raw/control", exist_ok=True)
+          os.makedirs("test_data/processed/senescent", exist_ok=True)
+          os.makedirs("test_data/processed/control", exist_ok=True)
 
           # Create dummy 2-channel tiff images
           dummy_img_ch1 = np.random.randint(0, 255, (10, 10), dtype=np.uint8)
           dummy_img_ch2 = np.random.randint(0, 255, (10, 10), dtype=np.uint8)
 
-          imsave("test_data/raw/class_A/test01-ch1.tiff", dummy_img_ch1)
-          imsave("test_data/raw/class_A/test01-ch2.tiff", dummy_img_ch2)
-          imsave("test_data/raw/class_B/test02-ch1.tiff", dummy_img_ch1)
-          imsave("test_data/raw/class_B/test02-ch2.tiff", dummy_img_ch2)
+          imsave("test_data/raw/senescent/test01-ch1.tiff", dummy_img_ch1)
+          imsave("test_data/raw/senescent/test01-ch2.tiff", dummy_img_ch2)
+          imsave("test_data/raw/control/test02-ch1.tiff", dummy_img_ch1)
+          imsave("test_data/raw/control/test02-ch2.tiff", dummy_img_ch2)
           print("Test data created.")
           EOF
 
