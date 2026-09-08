@@ -1,0 +1,32 @@
+stages:
+  preprocess:
+    matrix:
+      dataset:
+        - p4_dox_2026
+        # - p4_dox_2027
+      label:
+        - senescent
+        - control
+    cmd: >-
+      conda run -n cell python src/pyimageJ_batch_composite.py
+      data/raw/${item.dataset}/${item.label}
+      data/processed/${item.label}/${item.dataset}
+    deps:
+      - data/raw/${item.dataset}/${item.label}
+      - src/pyimageJ_batch_composite.py
+    outs:
+      - data/processed/${item.label}/${item.dataset}
+  # stage 2: training the model
+  train:
+    cmd: >-
+      conda run -n tch38 python src/main_load_doxtreated_dataset.py 
+      data/processed 
+      --save_path classifier_models 
+      --lr ${train.learning_rate} 
+      --batch_size ${train.batch_size} 
+      --epochs ${train.num_epochs}
+    deps:
+      - data/processed
+      - src/main_load_doxtreated_dataset.py
+    outs:
+      - classifier_models
