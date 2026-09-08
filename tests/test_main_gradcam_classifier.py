@@ -1,5 +1,5 @@
 import pandas as pd
-from main_gradcam_classifier import to_log_dataframe
+from src.main_gradcam_classifier import to_log_dataframe
 
 
 def test_to_log_dataframe_handles_scalar_logs():
