@@ -31,6 +31,21 @@ suitable for PyTorch and training deep models to distinguish senescent cells.
 pip install -r requirements.txt  # if available
 ```
 
+## DVC-based MLOps Pipeline
+
+This project uses DVC to turn the data preprocessing and model training workflow into a reproducible MLOps pipeline. The pipeline is defined in `dvc.yaml`, with stages for preprocessing microscopy data and training the classifier. To use it, first initialize DVC in the repository if needed (`dvc init`), then run `dvc repro` to execute the pipeline end-to-end from raw images to trained model artifacts. You can inspect the execution graph with `dvc dag`, check for stale outputs with `dvc status`, and push versioned data/model artifacts to remote storage with `dvc push`. This makes the raw data, processed datasets, and trained models traceable to specific commits, which is essential for reproducible ML experiments and collaborative model development.
+
+```bash
+dvc init
+dvc repro
+dvc dag
+dvc status
+dvc push
+```
+
+To use DVC, first create a folder ```data/raw``` at the main directory. Put your dataset folder in it and each folder should contains two folders named ```data/raw/YOUR_DATASET/control``` and ```data/raw/YOUR_DATASET/senescent```. After ```dvc repro``` you will see ```data/processed/control/YOUR_DATASET``` and ```data/processed/senescent/YOUR_DATASET```. Appended dataset can simply configure the ```dvc.yaml``` and add your new dataset therein.
+
+
 ## Usage
 
 ### Preparing Data
