@@ -33,6 +33,8 @@ trs, tss = uts.get_transforms(args.model)
 dataset = ImageFolder(root=args.folder_path, transform=trs)
 print(f"labels {np.unique(dataset.targets)}")
 print(dataset.classes)
+print("Label mapping:")
+print(dataset.class_to_idx)
 
 # seed
 d_seed = args.seed
@@ -128,7 +130,7 @@ fs_name = f"{args.classifier_type}_split_trts{args.split:.2f}" \
           f"_ep{args.epochs}_bs{args.batch_size}_sd{args.seed}"
 
 with open(os.path.join(save_path_full,fs_name+".pkl"),"wb") as fid:
-    pickle.dump({"train":tr_logs_df,'test':ts_logs_df,'args':vars(args)},fid)
+    pickle.dump({"train":tr_logs_df,'test':ts_logs_df,'args':vars(args),'label_map':tr_set.class_to_idx},fid)
 
 # Save the trained model
 torch.save(network.state_dict(), os.path.join(save_path_full, fs_name + ".pth"))

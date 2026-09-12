@@ -159,6 +159,6 @@ full_path = os.path.join(os.getcwd(),args.save_path)
 os.makedirs(full_path,exist_ok=True)
 fs_name = f"transfer_{args.classifier_type}_ep{args.epochs}_bs{args.batch_size}_sd{args.seed}"
 with open(os.path.join(full_path,fs_name+".pkl"),'wb') as fid:
-    pickle.dump({"train":log_tr,"test":log_ts,'metrics':ev_df,'args':vars(args)},fid)
+    pickle.dump({"train":log_tr,"test":log_ts,'metrics':ev_df,'args':vars(args),'label_map':tr_set.class_to_idx},fid)
 
 print("Done!")
