@@ -115,7 +115,8 @@ def main(arg):
     dataset = ImageFolder(root=arg.folder_path, transform=trs)
     print(f"labels {np.unique(dataset.targets)}")
     print(dataset.classes)
-
+    print("Label mapping:")
+    print(dataset.class_to_idx)
     # seed
     d_seed = arg.seed
     print(f"Setting random seed to:{d_seed}")
@@ -147,36 +148,6 @@ def main(arg):
     logs_ts = test(network,ts_loader,device)
 
     # grad cam preparation
-    #network.eval()
-    #for param in network.parameters():
-    #    param.require_grads = True
-
-    # loading images to process with gradcam
-    #rnd_idx = 0 # replace with specific index if needed
-    #input_tensor, _ = ts_set[rnd_idx] # get the first image from the test set
-    #test_image_path = ts_set.dataset.samples[ts_set.indices[rnd_idx]][0] # get the path of the test image
-
-    #input_tensor = input_tensor.unsqueeze(0).to(device) # add batch dimension and move to device
-
-    #target_layers = [network.backbone.layer4[-1]]
-    #cam = GradCAM(model=network, target_layers=target_layers)
-
-    #targets=[ClassifierOutputTarget(1)] # senescent cells
-    # generate heapmap
-    #grayscale_cam = cam(input_tensor=input_tensor, targets=targets)
-    #grayscale_cam = grayscale_cam[0, :]
-    # visualize the heatmap
-    #rgb_img = input_tensor.cpu().numpy().transpose(0,2,3,1)[0] # convert to HWC format, first image index is 0 since we only have one image in the batch
-    # reverse the normalization (assuming ImageNet normalization)
-    # use the resnet mean and std for denormalization, this should be
-    # modified if using different pretrained models with different normalization
-    #mean = np.array([0.485, 0.456, 0.406])
-    #std = np.array([0.229, 0.224, 0.225])
-    #rgb_img = std * rgb_img + mean
-    #rgb_img = np.clip(rgb_img, 0, 1) # clip to [0,1] range
-    #visualization = show_cam_on_image(rgb_img, grayscale_cam, use_rgb=True)
-    # display the visualization
-
     # saving the miscillaneous results
     tr_logs_df = to_log_dataframe(logs_tr)
     ts_logs_df = to_log_dataframe(logs_ts)
@@ -188,7 +159,7 @@ def main(arg):
             f"_trts{arg.split:.2f}_ep{arg.epochs}_bs{arg.batch_size}_sd{arg.seed}"
 
     with open(os.path.join(save_path_full,fs_name+".pkl"),"wb") as fid:
-        pickle.dump({"train":tr_logs_df,'test':ts_logs_df,'args':vars(arg)},fid)
+        pickle.dump({"train":tr_logs_df,'test':ts_logs_df,'args':vars(arg),'label_map':dataset.class_to_idx},fid)
 
     # Save the trained model
     torch.save(network.state_dict(), os.path.join(save_path_full, fs_name + ".pth"))

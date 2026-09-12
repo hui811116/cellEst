@@ -130,7 +130,7 @@ fs_name = f"{args.classifier_type}_split_trts{args.split:.2f}" \
           f"_ep{args.epochs}_bs{args.batch_size}_sd{args.seed}"
 
 with open(os.path.join(save_path_full,fs_name+".pkl"),"wb") as fid:
-    pickle.dump({"train":tr_logs_df,'test':ts_logs_df,'args':vars(args),'label_map':tr_set.class_to_idx},fid)
+    pickle.dump({"train":tr_logs_df,'test':ts_logs_df,'args':vars(args),'label_map':dataset.class_to_idx},fid)
 
 # Save the trained model
 torch.save(network.state_dict(), os.path.join(save_path_full, fs_name + ".pth"))
