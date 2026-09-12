@@ -29,6 +29,8 @@ parser.add_argument("--seed",type=int,default=42,help="random seed for reproduct
 parser.add_argument("--split",type=float,default=0.9,help="train/test splitting ratio")
 parser.add_argument('--classifier_type',type=str,choices=['mlp','linear'],default="mlp",
                     help="Choose classifier type")
+parser.add_argument('--premodel',type=str,choices=['resnet','inception'],default="resnet",
+                    help="Choose pre-trained model for feature extraction")
 
 
 def parse_args():
@@ -111,7 +113,7 @@ def test(model,dataloader,device):
 
 def main(arg):
     """Main function"""
-    trs, tss = uts.get_transforms("resnet")
+    trs, tss = uts.get_transforms(arg.premodel)
     dataset = ImageFolder(root=arg.folder_path, transform=trs)
     print(f"labels {np.unique(dataset.targets)}")
     print(dataset.classes)
@@ -136,10 +138,10 @@ def main(arg):
 
     device = uts.getDevice(False)
     # We should change to support multiple premodel [fixme]
-    print("Using model: resnet101 to extract vision features") 
+    print(f"Using model: {arg.premodel} to extract vision features") 
 
     network = GradCla(nclasses=len(dataset.classes),
-                    premodel="resnet",
+                    premodel=arg.premodel,
                     classifier_type=arg.classifier_type).to(device)
     optimizer = torch.optim.Adam(params=network.parameters(),lr=arg.lr)
 
@@ -156,6 +158,7 @@ def main(arg):
     os.makedirs(save_path_full,exist_ok=True)
     print("Saving logs")
     fs_name = f"gradcla_{arg.classifier_type}" \
+            f"_pre_{arg.premodel}" \
             f"_trts{arg.split:.2f}_ep{arg.epochs}_bs{arg.batch_size}_sd{arg.seed}"
 
     with open(os.path.join(save_path_full,fs_name+".pkl"),"wb") as fid:

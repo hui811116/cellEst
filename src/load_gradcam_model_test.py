@@ -26,11 +26,17 @@ parser.add_argument("--threshold", type=float, default=0.5,
 
 args = parser.parse_args()
 
+# config is the same name as model_path but with .pkl extension
+config_path = Path(args.model_path).with_suffix(".pkl")
+config = pickle.load(open(config_path, "rb"))
+mdl_args = argparse.Namespace(**config["args"])
+print(mdl_args)
+
 # Setup paths
 os.makedirs(args.save_path, exist_ok=True)
 
 # Transforms and Dataset
-trs, tss = uts.get_transforms("resnet") # will support more pretrained model [fixme]
+trs, tss = uts.get_transforms(mdl_args.premodel) # will support more pretrained model [fixme]
 dataset = ImageFolder(root=args.folder_path, transform=trs)
 
 # Seed for deterministic splitting (must match training exactly)
@@ -53,12 +59,9 @@ device = uts.getDevice(False)
 # Load Model
 print(f"Loading model from {args.model_path}")
 # get the .pkl file that contains arguments needed for reproduction
-with open(Path(args.model_path).with_suffix(".pkl"),"rb") as fid:
-    mdl_pkl = pickle.load(fid)
-mdl_args = argparse.Namespace(**mdl_pkl["args"])
-print(mdl_args)
+
 network = GradCla(nclasses=len(dataset.classes),
-                  premodel="resnet", # will support more pretrained model [fixme]
+                  premodel=mdl_args.premodel, # will support more pretrained model [fixme]
                   classifier_type=mdl_args.classifier_type).to(device)
 network.load_state_dict(torch.load(args.model_path, map_location=device))
 network.eval()
@@ -68,12 +71,19 @@ for param in network.parameters():
     param.requires_grad = True
 
 # Setup GradCAM
-target_layers = [network.backbone.layer4[-1]]
+if mdl_args.premodel == "resnet":
+    target_layers = [network.backbone.layer4[-1]]
+elif mdl_args.premodel == "inception":
+    target_layers = [network.backbone.Mixed_7c]
+else:
+    raise ValueError(f"Unsupported premodel: {mdl_args.premodel}")
+
 cam = GradCAM(model=network, target_layers=target_layers)
 
 # Identify the target class index for 'senescent'
-if 'senescent' in dataset.class_to_idx:
-    senescent_idx = dataset.class_to_idx['senescent']
+label_map = config.get("label_map", {})
+if label_map and 'senescent' in label_map:
+    senescent_idx = label_map['senescent']
 else:
     print("Warning: 'senescent' class not found in dataset. Defaulting to index 1.")
     senescent_idx = 1
@@ -82,13 +92,12 @@ targets = [ClassifierOutputTarget(senescent_idx)]
 print(f"Generating GradCAM for '{dataset.classes[senescent_idx]}' class (index {senescent_idx}).")
 
 # Normalization constants used during training/transforms
+# Applied for ResNet and Inception models trained on ImageNet
 mean = np.array([0.485, 0.456, 0.406])
 std = np.array([0.229, 0.224, 0.225])
 
 # Process all images in the test set
-#for rnd_idx in range(len(ts_set)):
 for rnd_idx, (input_tensor, true_label) in enumerate(ts_set):
-    #input_tensor, true_label = ts_set[rnd_idx]
     # Get original file path to use its name for saving
     original_path = ts_set.dataset.samples[ts_set.indices[rnd_idx]][0]
     filename = os.path.basename(original_path)
@@ -112,7 +121,7 @@ for rnd_idx, (input_tensor, true_label) in enumerate(ts_set):
     pred_class_name = dataset.classes[pred_label]
 
     # Save the resulting image
-    save_file = os.path.join(args.save_path, f"gradcam_{filename}.tiff")
+    save_file = os.path.join(args.save_path, f"gradcam_{filename}")
     # Create figure with title
     fig, ax = plt.subplots(figsize=(6, 6))
     #ax.imshow(visualization)

@@ -121,6 +121,7 @@ class GradCla(nn.Module):
             self.backbone = inception_v3(weights="IMAGENET1K_V1")
         else:
             raise NotImplementedError(f"unsupported pretrained model:{premodel}")
+        self.premodel = premodel
         #self.backbone = resnet101(weights="DEFAULT")
         for param in self.backbone.parameters():
             param.require_grads = False
@@ -140,7 +141,15 @@ class GradCla(nn.Module):
         #)
         for param in self.backbone.fc.parameters():
             param.require_grads = True
+    def _pretrained_model_output_format_handle(self,x):
+        """handle the output format of the pretrained model, for example, inception_v3 returns a tuple of (logits, aux_logits)"""
+        if self.premodel == "inception":
+            if isinstance(x,InceptionOutputs):
+                x = x[0]
+        return x
     def forward(self,x):
         """forward method to extract features from the input image using the pretrained model, 
         and then classify the extracted features using the classifier"""
-        return self.backbone(x)
+        #return self.backbone(x)
+        # handle model output format
+        return self._pretrained_model_output_format_handle(self.backbone(x))

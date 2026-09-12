@@ -22,14 +22,15 @@ parser.add_argument("--ev_freq",type=int,default=1,
                     help="testing frequency in terms of number of epochs")
 parser.add_argument("--seed",type=int,default=42,help="random seed for reproduction")
 parser.add_argument("--split",type=float,default=0.9,help="train/test splitting ratio")
-parser.add_argument("--model",type=str,default="inception",choices=["resnet","inception"],
+parser.add_argument("--premodel",type=str,default="inception",choices=["resnet","inception"],
                     help="pretrained model to use")
 parser.add_argument("--classifier_type",type=str,default="mlp",choices=["mlp","linear"],
                     help="classifier type")
 
+
 args = parser.parse_args()
 
-trs, tss = uts.get_transforms(args.model)
+trs, tss = uts.get_transforms(args.premodel)
 dataset = ImageFolder(root=args.folder_path, transform=trs)
 print(f"labels {np.unique(dataset.targets)}")
 print(dataset.classes)
@@ -53,8 +54,8 @@ tr_loader = DataLoader(tr_set,batch_size=args.batch_size,shuffle=True,drop_last=
 ts_loader = DataLoader(ts_set,batch_size=args.batch_size,shuffle=False)
 
 device = uts.getDevice(False)
-print(f"Using model: {args.model} to extract vision features")
-network = PreFc(nclasses=len(dataset.classes),premodel=args.model).to(device)
+print(f"Using model: {args.premodel} to extract vision features")
+network = PreFc(nclasses=len(dataset.classes),premodel=args.premodel).to(device)
 optimizer = torch.optim.Adam(params=network.parameters(),lr=args.lr)
 
 def train(ep):
@@ -126,7 +127,7 @@ ts_logs_df = pd.DataFrame.from_dict(logs_ts)
 save_path_full = os.path.join(os.getcwd(),args.save_path)
 os.makedirs(save_path_full,exist_ok=True)
 print("Saving logs")
-fs_name = f"{args.classifier_type}_split_trts{args.split:.2f}" \
+fs_name = f"{args.classifier_type}_pre_{args.premodel}_split_trts{args.split:.2f}" \
           f"_ep{args.epochs}_bs{args.batch_size}_sd{args.seed}"
 
 with open(os.path.join(save_path_full,fs_name+".pkl"),"wb") as fid:
