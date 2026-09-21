@@ -73,7 +73,7 @@ def train(model,dataloader,optimizer,device,epochs):
             tot_cnt += len(y_label)
         t_end = time.perf_counter()
 
-        print(f"Epochs {ep}, loss={loss_sum/len(dataloader):.5f},",
+        print(f"Epochs {ep}/{epochs}, loss={loss_sum/len(dataloader):.5f},",
               f" acc={acc_cnt/tot_cnt:.5f}({acc_cnt}/{tot_cnt}),",
               f" time={t_end - t_start:.2f}s")
         return {"loss":loss_sum/len(dataloader),"acc":acc_cnt/tot_cnt,

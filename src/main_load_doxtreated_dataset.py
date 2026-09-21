@@ -76,8 +76,9 @@ def train(ep):
         loss_sum += loss.item()
         acc_cnt += (llr_out.argmax(dim=1)== y_label).sum().item()
         tot_cnt += len(y_label)
-    print("Epochs {:}, loss={:.5f}, acc={:.5f}({:}/{:})".format(
+    print("Epochs {:}/{:}, loss={:.5f}, acc={:.5f}({:}/{:})".format(
         ep,
+        args.epochs,
         loss_sum/len(tr_loader),
         acc_cnt/tot_cnt,
         acc_cnt,
