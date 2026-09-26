@@ -47,3 +47,22 @@ def build_scheduler(train_cfg, optimizer):
     if train_cfg.scheduler == "cosine":
         return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=train_cfg.epochs)
     return None
+
+
+def save_training_checkpoint(path, model, optimizer, scheduler, epoch, best_epoch, best_val_auc):
+    checkpoint = {
+        "classifier_state_dict": model.classifier.state_dict() if hasattr(model, "classifier") else None,
+        "optimizer_state_dict": optimizer.state_dict(),
+        "scheduler_state_dict": scheduler.state_dict() if scheduler is not None else None,
+        "epoch": epoch,
+        "best_epoch": best_epoch,
+        "best_val_auc": best_val_auc,
+    }
+    torch.save(checkpoint, path)
+
+def _head_module(model):
+    if hasattr(model, "classifier"):
+        return model.classifier
+    if hasattr(model, "backbone") and hasattr(model.backbone, "fc"):
+        return model.backbone.fc
+    raise ValueError("Cannot identify the trainable classifier head for checkpointing.")

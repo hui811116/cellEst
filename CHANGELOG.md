@@ -12,3 +12,9 @@
 ## [0.0.1] - 2026-09-21
 - Integrate ```src/script_pyimage_batch_chs.py``` script, now support nucleus/cytoskeleton/both
 - Creating src module folders ```src/preprocess``` and ```src/classifiers``` for imageJ preprocessing and pytorch ML classifier training
+
+
+## [0.1.1] - 2026-09-26
+- Packaging cellest as a classification package supporting HuggingFace pretrained model
+- Upgrade source file structure for packaging
+- Conguration change: now one configure the data paths, model names, and training parameters using a config.yaml

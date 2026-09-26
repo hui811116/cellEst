@@ -1,32 +1,60 @@
 from pathlib import Path
 from typing import Literal
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 from cellest.classifiers._macro import SUPPORTED_ARCHITECTURES, CLASSIFIER_TYPES
-
+"""
+Config.yaml format:
+        data:
+            train_path: path/to/train/dataset
+            test_path: path/to/test/dataset
+            # if train_path and test_path are not specified, then the dataset will be split into train and test sets
+            split_ratio: 0.8 # must be specified if train_path and test_path are not specified
+        model:
+            arch: [cell|pretrained]
+            # if arch is cell, then the model will be trained from scratch
+            premodel: [resnet|inception] # must be specified if arch is cell
+            # if arch is pretrained, then the model will be finetuned from a pretrained model
+            pretrained_path: [example: facebook/dino:resnet50] # must be specified if archi is pretrained
+            # for all cases, must be specified
+            classifier_type: [mlp|linear]
+            model_nickname: [example: mark2] # optional, random string+timestamp if not specified 
+        train:
+            batch_size: 32
+            epochs: 100
+            learning_rate: 0.001
+            weight_decay: 0.0001
+            optimizer: [adam|sgd]
+            scheduler: [step|cosine]
+            step_size: 30 # must be specified if scheduler is step
+            gamma: 0.1 # must be specified if scheduler is step
+"""
 class DataConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    data_path: Path | None = None
-    train_path: Path | None = None
-    test_path: Path | None = None
-    split_ratio: float | None = Field(default=None, gt=0, lt=1)
+    train_data_path: Path = Field(
+        validation_alias=AliasChoices("train_data_path", "train_path", "data_path")
+    )
+    validation_data_path: Path | None = None
+    test_data_path: Path | None = Field(
+        default=None, validation_alias=AliasChoices("test_data_path", "test_path")
+    )
+    split_ratio: float = Field(default=0.8, gt=0, lt=1)
 
     @model_validator(mode="after")
-    def validate_data_source(self) -> "DataConfig":
-        has_explicit_paths = self.train_path is not None or self.test_path is not None
-
-        if has_explicit_paths and (self.train_path is None or self.test_path is None):
-            raise ValueError("Specify both train_path and test_path.")
-
-        if has_explicit_paths and self.data_path is not None:
-            raise ValueError("Specify either data_path with split_ratio, or train_path and test_path.")
-
-        if not has_explicit_paths and (self.data_path is None or self.split_ratio is None):
-            raise ValueError(
-                "Specify data_path and split_ratio, or provide train_path and test_path."
-            )
-
+    def validate_data_config(self) -> "DataConfig":
+        # traing datat path is required
+        if not self.train_data_path.exists():
+            raise ValueError(f"Train data path does not exist: {self.train_data_path}")
+        # validation split is optional, if presented, split the training data only
+        if self.validation_data_path is not None and not self.validation_data_path.exists():
+            raise ValueError(f"Validation data path does not exist: {self.validation_data_path}")
+        # split ratio is only used if validation data path is not provided
+        if self.validation_data_path is None and not (0 < self.split_ratio < 1):
+            raise ValueError(f"Split ratio must be between 0 and 1: {self.split_ratio}")
+        # test path is optional, if presented, check if it exists
+        if self.test_data_path is not None and not self.test_data_path.exists():
+            raise ValueError(f"Test data path does not exist: {self.test_data_path}")
         return self
 
 class ModelConfig(BaseModel):
@@ -59,6 +87,7 @@ class TrainConfig(BaseModel):
     scheduler: Literal["step", "cosine", "none"] = "none"
     step_size: int | None = Field(default=None, gt=0)
     gamma: float | None = Field(default=None, gt=0, lt=1)
+    output_dir: Path = Path("results")
 
     @model_validator(mode="after")
     def validate_train_config(self) -> "TrainConfig":
