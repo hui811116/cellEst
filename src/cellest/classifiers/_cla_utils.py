@@ -1,19 +1,8 @@
-import numpy as np
-import sys
-import os
 import torch
 import random
-import itertools
-import math
 from torchvision import transforms 
-#from sklearn.metrics import normalized_mutual_info_score, v_measure_score, adjusted_rand_score, accuracy_score
-#from sklearn import cluster
-#from sklearn.preprocessing import Normalizer
-#from scipy.optimize import linear_sum_assignment
-#from sklearn.decomposition import PCA
 
-
-def getDevice(force_cpu):
+def get_device(force_cpu):
 	try:
 		if force_cpu:
 			device= torch.device("cpu")
@@ -56,20 +45,29 @@ def get_transforms(model_name):
     """Get model-specific image transformations.
     
     Args:
-        model_name: 'resnet' or 'inception'
+        model_name: 'resnet' or 'inception' or 'transformer'
     
     Returns:
         tuple: (train_transforms, test_transforms)
     """
     imagenet_mean = [0.485, 0.456, 0.406]
     imagenet_std = [0.229, 0.224, 0.225]
-    
-    if model_name == 'resnet':
+    if model_name == 'pretrained':
+        transform_train = transforms.Compose(
+                    [
+                        transforms.RandomHorizontalFlip(p=0.5),
+                        transforms.RandomVerticalFlip(p=0.5),
+                        transforms.PILToTensor(),
+                    ]
+                )
+        transform_test = transforms.PILToTensor()
+        return transform_train, transform_test
+    elif model_name == 'resnet':
         size = 224
     elif model_name == 'inception':
         size = 299
     else:
-        raise ValueError(f"Unknown model: {model_name}")
+        raise ValueError(f"Unknown architecture: {model_name}")
     
     trs = transforms.Compose([
         transforms.Resize(size),

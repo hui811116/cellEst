@@ -1,0 +1,13 @@
+data:
+  data_path: "data/processed"
+  split_ratio: 0.8 # train fraction
+model:
+  arch: "pretrained" #cell | pretrained
+  premodel: "transformer"
+  pretrained_path: "facebook/dino-vitb16" # pretrained model path
+  classifier_type: "linear"
+train:
+  batch_size: 16
+  epochs: 5
+  learning_rate: 0.001
+  optimizer: "adam"

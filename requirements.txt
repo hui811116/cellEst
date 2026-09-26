@@ -48,7 +48,11 @@ tomli-w==1.2.0
 torch==2.4.1+cu124
 torchaudio==2.4.1+cu124
 torchvision==0.19.1+cu124
+torcheval==0.0.7
 triton==3.0.0
 typing-extensions==4.16.0
 urllib3==2.7.0
 xarray==2026.7.0
+tqdm==4.70.1
+transformers==4.48.3
+accelerate==1.15.0
