@@ -1,0 +1,10 @@
+# configure your trained model path, with [path/to/results/folder/model.pt]
+# below are example paths for transformer and cnn models, respectively
+#model_path: "results/transformer_vision_transformer_20260927_231026_B80WLy9n/model.pt"
+model_path: "results/cnn_resnet101_20260927_220658_Xz9OcO1h/model.pt"
+data:
+  dataset_path: "data/processed" # path to the dataset folder, which should contain subfolders for each class
+output_dir: "gradcam_output_cnn" # output directory for Grad-CAM visualizations
+target_class: "senescent" # target class for which to generate Grad-CAM visualizations
+batch_size: 4
+threshold: 0.5 # threshold for gradcam contouring, values below this will be considered background
