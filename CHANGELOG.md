@@ -18,3 +18,9 @@
 - Packaging cellest as a classification package supporting HuggingFace pretrained model
 - Upgrade source file structure for packaging
 - Conguration change: now one configure the data paths, model names, and training parameters using a config.yaml
+
+
+## [0.2.1] - 2026-09-27
+- New design of the architectures, now supports CNN and Transformers based backbone
+- Added example scripts using this package. ```examples/training/main.py``` and ```examples/inference/main.py```
+- GradCam function tested with the example scripts
