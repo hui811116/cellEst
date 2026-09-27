@@ -1,6 +1,8 @@
 SUPPORTED_ARCHITECTURES = [
-    "resnet",
-    "inception",
+    "resnet101",
+    "inception_v3",
+    "convnext_base",
+    "efficientnet_v2_m",
 ]
 
 SUPPORTED_CLASSIFIER_TYPES = [

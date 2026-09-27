@@ -1,13 +1,11 @@
 from ._transformer_cla import (
+    TransformerClassifier,
     TransformerCla,
-)
-from ._grad_cam_hf import (
-    HFTransformerGradCAM,
 )
 
 
 __all__ = [
     "TransformerCla",
-    "HFTransformerGradCAM",
+    "TransformerClassifier",
 ]
 

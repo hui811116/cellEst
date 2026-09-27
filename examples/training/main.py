@@ -1,11 +1,13 @@
 import argparse
 import math
 from pathlib import Path
+from typing import cast
 
 import matplotlib
 matplotlib.use("Agg")
 import torch
 from torch.utils.data import DataLoader
+from torchvision.datasets import ImageFolder
 
 from cellest.config import CellestClaTrainConfig
 from cellest.classifiers import (
@@ -20,8 +22,8 @@ from cellest.classifiers import (
     create_output_dir,
     save_run_plots,
 )
-from cellest.classifiers.cell import PreFc
-from cellest.classifiers.pretrained import TransformerCla
+from cellest.classifiers.cell import CNNClassifier
+from cellest.classifiers.pretrained import TransformerClassifier
 from cellest.classifiers import build_optimizer, build_scheduler
 from cellest.dataloader import build_datasets
 
@@ -31,9 +33,9 @@ logger = TrainLogger(__name__)
 
 def build_model(model_cfg, nclasses):
     """instantiate the classifier described by the validated model config"""
-    if model_cfg.arch == "cell":
-        return PreFc(nclasses, model_cfg.premodel, model_cfg.classifier_type)
-    return TransformerCla(model_cfg.pretrained_path, nclasses)
+    if model_cfg.family == "cnn":
+        return CNNClassifier(nclasses, model_cfg.architecture, model_cfg.classifier_type)
+    return TransformerClassifier(cast(str, model_cfg.pretrained_path), nclasses)
 
 
 def evaluate_model(model, loader, classes, criterion, device):
@@ -54,8 +56,12 @@ def evaluate_model(model, loader, classes, criterion, device):
     return loss, accuracy, metrics, curves
 
 
-def build_data_loaders(config, device):
-    transform_train, transform_test = get_transforms(config.model.arch)
+def build_data_loaders(config, model, device):
+    if config.model.family == "cnn":
+        transform_train, transform_test = get_transforms(config.model.architecture)
+    else:
+        transform_train = lambda image: model.preprocess([image], device)[0].cpu()
+        transform_test = transform_train
     train_set, validation_set, test_set = build_datasets(
         config.data, transform_train, transform_test
     )
@@ -118,6 +124,8 @@ def train_epochs(model, train_loader, validation_loader, optimizer, scheduler, c
 def run_training(config, args):
     setup_seed(args.seed)
     device = get_device(force_cpu=args.force_cpu)
+    classes = ImageFolder(str(config.data.train_data_path)).classes
+    model = build_model(config.model, len(classes))
     (
         train_set,
         validation_set,
@@ -126,8 +134,8 @@ def run_training(config, args):
         validation_loader,
         test_loader,
         classes,
-    ) = build_data_loaders(config, device)
-    model = build_model(config.model, len(classes)).to(device)
+    ) = build_data_loaders(config, model, device)
+    model = model.to(device)
     optimizer = build_optimizer(config.train, model)
     scheduler = build_scheduler(config.train, optimizer)
     criterion = torch.nn.CrossEntropyLoss()
@@ -149,14 +157,14 @@ def run_training(config, args):
         model, evaluation_loader, classes, criterion, device
     )
 
-    model_size = config.model.pretrained_path or config.model.premodel or config.model.arch
+    model_size = config.model.pretrained_path or config.model.architecture
     model_metadata = {
         "source_name": source_name,
         "head_type": config.model.classifier_type,
         "model_size": model_size,
-        "arch": config.model.arch,
+        "family": config.model.family,
+        "architecture": config.model.architecture,
         "pretrained_path": config.model.pretrained_path,
-        "premodel": config.model.premodel,
         "num_classes": len(classes),
         "class_names": classes,
         "state_dict": {

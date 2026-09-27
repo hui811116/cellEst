@@ -3,7 +3,6 @@ from typing import Literal
 import json
 import yaml
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
-from cellest.classifiers._macro import SUPPORTED_ARCHITECTURES, CLASSIFIER_TYPES
 from cellest.classifiers.cell._constants import SUPPORTED_ARCHITECTURES as CELL_SUPPORTED_ARCHITECTURES
 """
 Config.yaml format:
@@ -13,11 +12,9 @@ Config.yaml format:
             # if train_path and test_path are not specified, then the dataset will be split into train and test sets
             split_ratio: 0.8 # must be specified if train_path and test_path are not specified
         model:
-            arch: [cell|pretrained]
-            # if arch is cell, then the model will be trained from scratch
-            premodel: [resnet|inception] # must be specified if arch is cell
-            # if arch is pretrained, then the model will be finetuned from a pretrained model
-            pretrained_path: [example: facebook/dino:resnet50] # must be specified if archi is pretrained
+            family: [cnn|transformer]
+            architecture: [resnet101|inception_v3|convnext_base|efficientnet_v2_m|vision_transformer]
+            pretrained_path: [example: facebook/dino-vitb16] # required for transformers
             # for all cases, must be specified
             classifier_type: [mlp|linear]
             model_nickname: [example: mark2] # optional, random string+timestamp if not specified 
@@ -125,22 +122,20 @@ class DataConfig(BaseModel):
 class ModelConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    arch: Literal[tuple(SUPPORTED_ARCHITECTURES)]
-    premodel: str | None = None
+    family: Literal["cnn", "transformer"]
+    architecture: str
     pretrained_path: str | None = None
-    classifier_type: Literal[tuple(CLASSIFIER_TYPES)] = "linear"
+    classifier_type: Literal["mlp", "linear"] = "linear"
     model_nickname: str | None = None
 
     @model_validator(mode="after")
     def validate_model_config(self) -> "ModelConfig":
-        if self.arch == "cell" and self.premodel not in CELL_SUPPORTED_ARCHITECTURES:
-            raise ValueError(f"Cell models require premodel in {CELL_SUPPORTED_ARCHITECTURES}.")
-
-        if self.arch == "pretrained" and self.premodel is None:
-            raise ValueError("Specify premodel for pretrained architecture.")
-
-        if self.arch == "pretrained" and self.pretrained_path is None:
-            raise ValueError("Specify pretrained_path for pretrained architecture.")
+        if self.family == "cnn" and self.architecture not in CELL_SUPPORTED_ARCHITECTURES:
+            raise ValueError("CNN architecture must be one of the supported architectures.")
+        if self.family == "transformer" and self.pretrained_path is None:
+            raise ValueError("Transformer models require pretrained_path.")
+        if self.family == "transformer" and self.architecture != "vision_transformer":
+            raise ValueError("Transformer architecture must be 'vision_transformer'.")
 
         return self
 

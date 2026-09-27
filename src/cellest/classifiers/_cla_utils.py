@@ -62,10 +62,14 @@ def get_transforms(model_name):
                 )
         transform_test = transforms.PILToTensor()
         return transform_train, transform_test
-    elif model_name == 'resnet':
+    elif model_name in {'resnet', 'resnet101'}:
         size = 224
-    elif model_name == 'inception':
+    elif model_name in {'inception', 'inception_v3'}:
         size = 299
+    elif model_name == 'convnext_base':
+        size = 224
+    elif model_name == 'efficientnet_v2_m':
+        size = 480
     else:
         raise ValueError(f"Unknown architecture: {model_name}")
     

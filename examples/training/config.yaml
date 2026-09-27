@@ -5,10 +5,16 @@ data:
   split_ratio: 0.8 # training fraction when validation_data_path is omitted
   
 model:
-  arch: "pretrained" #cell | pretrained
-  premodel: "transformer"
-  pretrained_path: "facebook/dino-vitb16" # pretrained model path
+  # Below is an example of a transformer model configuration.
+  family: "transformer" #cnn | transformer
+  architecture: "vision_transformer"
+  pretrained_path: "facebook/dino-vitb16" # pretrained model path, other examples: "google/vit-base-patch16-224", "microsoft/swin-tiny-patch4-window7-224"
   classifier_type: "linear"
+  #comment the above lines and uncomment the following lines for a cnn model configuration
+  # #uncomment the following line for a cnn model configuration
+  # family: "cnn" #cnn | transformer
+  # architecture: "efficientnet_v2_m" # resnet101 | inception_v3 | convnext_base | efficientnet_v2_m
+  # classifier_type: "mlp" # mlp | linear
 train:
   batch_size: 16
   epochs: 5

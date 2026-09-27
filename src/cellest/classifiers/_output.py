@@ -12,9 +12,7 @@ from cellest.utils import generate_random_strings
 def create_output_dir(config):
     source_name = config.model.model_nickname
     if source_name is None:
-        source_name = config.model.arch
-        if config.model.premodel is not None:
-            source_name += f"_{config.model.premodel}"
+        source_name = f"{config.model.family}_{config.model.architecture}"
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     source_name = f"{source_name}_{timestamp}_{generate_random_strings()}"
     run_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", source_name).strip("_.-")

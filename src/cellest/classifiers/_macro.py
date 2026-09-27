@@ -1,6 +1,12 @@
+SUPPORTED_FAMILIES = [
+    "cnn",
+    "transformer",
+]
+
 SUPPORTED_ARCHITECTURES = [
-    "cell",
-    "pretrained",
+    "resnet101",
+    "inception_v3",
+    "vision_transformer",
 ]
 
 CLASSIFIER_TYPES = [

@@ -6,7 +6,6 @@ from typing import cast
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import numpy as np
 import torch
 import tqdm
 from pytorch_grad_cam import GradCAM
@@ -16,8 +15,8 @@ from torch.utils.data import DataLoader, Dataset
 from torchvision.datasets import ImageFolder
 
 from cellest.classifiers import get_device, get_transforms, setup_seed
-from cellest.classifiers.cell import PreFc
-from cellest.classifiers.pretrained import HFTransformerGradCAM, TransformerCla
+from cellest.classifiers.cell import CNNClassifier
+from cellest.classifiers.pretrained import TransformerClassifier
 from cellest.config import InferenceConfig, InferenceModelConfig
 
 
@@ -51,8 +50,8 @@ def collate_images(batch):
 
 def build_dataloader(config: InferenceConfig, model_info: InferenceModelConfig):
     transform = None
-    if model_info.model.arch == "cell":
-        _, transform = get_transforms(model_info.model.premodel)
+    if model_info.model.family == "cnn":
+        _, transform = get_transforms(model_info.model.architecture)
 
     dataset = InferenceDataset(config.data.data_path, transform)
     if dataset.images.classes != model_info.class_names:
@@ -72,79 +71,60 @@ def build_dataloader(config: InferenceConfig, model_info: InferenceModelConfig):
 
 def build_gradcam(model_info: InferenceModelConfig, state_dict, device):
     model_config = model_info.model
-    if model_config.arch == "cell":
-        model = PreFc(
+    if model_config.family == "cnn":
+        model = CNNClassifier(
             nclasses=model_info.num_classes,
-            premodel=model_config.premodel,
+            architecture=model_config.architecture,
             classifier_type=model_config.classifier_type,
         ).to(device)
-        model.load_state_dict(state_dict)
-        model.eval()
+    else:
+        model = TransformerClassifier(
+            model_name=cast(str, model_config.pretrained_path),
+            num_classes=model_info.num_classes,
+        ).to(device)
 
-        if model_config.premodel == "resnet":
-            target_layer = model.extract_net.layer4[-1]
-        elif model_config.premodel == "inception":
-            target_layer = model.extract_net.Mixed_7c
-        else:
-            raise ValueError(f"Unsupported cell model: {model_config.premodel}")
-
-        cam = GradCAM(model=model, target_layers=[target_layer])
-        return model, cam
-
-    classifier = TransformerCla(
-        model_name=cast(str, model_config.pretrained_path),
-        num_classes=model_info.num_classes,
-    ).to(device)
-    classifier.load_state_dict(state_dict)
-    model = HFTransformerGradCAM(classifier).to(device)
+    model.load_state_dict(state_dict)
     model.eval()
-    cam = GradCAM(model=model, target_layers=[model.target_layer], reshape_transform=model.reshape_transform)
-    return model, cam
-
-
-def denormalize_cell_images(images):
-    mean = np.array([0.485, 0.456, 0.406])[None, :, None, None]
-    std = np.array([0.229, 0.224, 0.225])[None, :, None, None]
-    images = images.detach().cpu().numpy()
-    return np.clip((images * std + mean).transpose(0, 2, 3, 1), 0, 1)
-
-
-def denormalize_transformer_images(images, processor):
-    mean = torch.tensor(processor.image_mean, device=images.device)[None, :, None, None]
-    std = torch.tensor(processor.image_std, device=images.device)[None, :, None, None]
-    images = images.detach() * std + mean
-    return images.clamp(0, 1).cpu().numpy().transpose(0, 2, 3, 1)
-
-
-def resize_cam(cam_map, image):
-    height, width = image.shape[:2]
-    cam_tensor = torch.from_numpy(cam_map).unsqueeze(0).unsqueeze(0)
-    resized = torch.nn.functional.interpolate(
-        cam_tensor,
-        size=(height, width),
-        mode="bilinear",
-        align_corners=False,
+    target_layers = model.get_target_layers()
+    cam = GradCAM(
+        model=model,
+        target_layers=target_layers,
+        reshape_transform=model.reshape_transform,
     )
-    return resized.squeeze().numpy()
+    return model, cam
 
 
 def save_gradcam_image(
     image, cam_map, image_path, true_label, dataset, prediction, output_dir, threshold
 ):
-    cam_map = resize_cam(cam_map, image)
-    overlay = show_cam_on_image(image.astype(np.float32), cam_map, use_rgb=True)
+    image_height, image_width = image.shape[:2]
+    cam_tensor = torch.from_numpy(cam_map).unsqueeze(0).unsqueeze(0)
+    cam_map = torch.nn.functional.interpolate(
+        cam_tensor,
+        size=(image_height, image_width),
+        mode="bilinear",
+        align_corners=False,
+    ).squeeze().numpy()
+    overlay = show_cam_on_image(image.astype("float32"), cam_map, use_rgb=True)
     relative_path = Path(image_path).relative_to(dataset.images.root)
     save_path = output_dir / relative_path.parent / f"gradcam_{relative_path.stem}.png"
     save_path.parent.mkdir(parents=True, exist_ok=True)
 
-    figure, axis = plt.subplots(figsize=(6, 6))
-    axis.imshow(overlay)
-    axis.contour(cam_map, levels=[threshold], colors="red")
-    axis.set_title(
+    figure, axes = plt.subplots(1, 2, figsize=(12, 6))
+    title = (
         f"True: {dataset.images.classes[true_label]} | "
         f"Pred: {dataset.images.classes[prediction]}"
     )
-    axis.axis("off")
+
+    axes[0].imshow(image)
+    axes[0].contour(cam_map, levels=[threshold], colors="red")
+    axes[0].set_title(f"Contour\n{title}")
+    axes[0].axis("off")
+
+    axes[1].imshow(overlay)
+    axes[1].set_title(f"GradCAM overlay\n{title}")
+    axes[1].axis("off")
+
     figure.savefig(save_path, bbox_inches="tight", pad_inches=0.1)
     plt.close(figure)
 
@@ -156,14 +136,8 @@ def run_inference(dataset, loader, model, cam, config: InferenceConfig, device):
 
     try:
         for images, labels, paths in tqdm.tqdm(loader, desc="Inference"):
-            if isinstance(model, HFTransformerGradCAM):
-                input_batch = model.preprocess(images).requires_grad_(True)
-                display_images = denormalize_transformer_images(
-                    input_batch, model.processor
-                )
-            else:
-                input_batch = images.to(device).requires_grad_(True)
-                display_images = denormalize_cell_images(images)
+            input_batch = model.preprocess(images, device).requires_grad_(True)
+            display_images = model.display_images(input_batch)
 
             cam_maps = cam(
                 input_tensor=input_batch,

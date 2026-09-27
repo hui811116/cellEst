@@ -1,9 +1,8 @@
 from ._networks import (
+    CNNClassifier,
     PreFc,
 )
-from ._grad_cam_cla import (
-   GradCla,
-)
+from ._grad_cam_cla import GradCla
 from ._constants import (
     SUPPORTED_ARCHITECTURES,
     SUPPORTED_CLASSIFIER_TYPES,
@@ -12,6 +11,7 @@ from ._constants import (
 
 __all__ = [
     "PreFc",
+    "CNNClassifier",
     "GradCla",
     # constants
     "SUPPORTED_ARCHITECTURES",
