@@ -48,6 +48,7 @@ class TransformerClassifier(nn.Module):
 
     @staticmethod
     def _build_head(classifier_type: str, feature_dim: int, num_classes: int):
+        classifier_type = classifier_type.lower()
         if classifier_type == "linear":
             return LinearClassifier(num_classes, feature_dim)
         if classifier_type == "mlp":

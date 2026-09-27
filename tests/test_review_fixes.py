@@ -143,7 +143,7 @@ def test_transformer_classifier_uses_requested_head_and_rejects_swin(monkeypatch
         lambda _: DummyTransformerBackbone(),
     )
 
-    classifier = TransformerClassifier("facebook/dino-vitb16", 3, "mlp")
+    classifier = TransformerClassifier("facebook/dino-vitb16", 3, "MLP")
 
     assert classifier.classifier.__class__.__name__ == "MLPClassifier"
 
