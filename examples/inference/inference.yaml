@@ -1,0 +1,7 @@
+model_path: "results/pretrained_transformer_20260927_195639_ezsstX4a/model.pt"
+data:
+  dataset_path: "data/processed"
+output_dir: "gradcam_output"
+target_class: "senescent"
+batch_size: 16
+threshold: 0.5

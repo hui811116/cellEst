@@ -159,6 +159,10 @@ def run_training(config, args):
         "premodel": config.model.premodel,
         "num_classes": len(classes),
         "class_names": classes,
+        "state_dict": {
+            name: value.detach().cpu()
+            for name, value in model.state_dict().items()
+        },
     }
 
     summary = {
@@ -178,6 +182,8 @@ def run_training(config, args):
         "n_train": len(train_set),
         "n_val": len(validation_set),
         "n_test": len(test_set) if test_set is not None else 0,
+        "model": config.model.model_dump(mode="json"),
+        "num_classes": len(classes),
         "class_names": classes,
     }
     save_run_outputs(output_dir, history, curves, model_metadata, summary)

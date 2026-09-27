@@ -1,8 +1,10 @@
 from pathlib import Path
 from typing import Literal
+import json
 import yaml
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 from cellest.classifiers._macro import SUPPORTED_ARCHITECTURES, CLASSIFIER_TYPES
+from cellest.classifiers.cell._constants import SUPPORTED_ARCHITECTURES as CELL_SUPPORTED_ARCHITECTURES
 """
 Config.yaml format:
         data:
@@ -29,6 +31,69 @@ Config.yaml format:
             step_size: 30 # must be specified if scheduler is step
             gamma: 0.1 # must be specified if scheduler is step
 """
+
+class InferenceDataConfig(BaseModel):
+    """Dataset settings for inference."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    data_path: Path = Field(validation_alias=AliasChoices("dataset_path", "data_path"))
+
+    @model_validator(mode="after")
+    def validate_data_config(self) -> "InferenceDataConfig":
+        if not self.data_path.is_dir():
+            raise ValueError(f"Inference dataset directory does not exist: {self.data_path}")
+        return self
+
+
+class InferenceConfig(BaseModel):
+    """Runtime settings for a GradCAM inference run."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    model_path: Path
+    data: InferenceDataConfig
+    output_dir: Path = Path("gradcam_output")
+    target_class: str
+    batch_size: int = Field(default=1, gt=0)
+    threshold: float = Field(default=0.5, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def validate_model_path(self) -> "InferenceConfig":
+        if not self.model_path.is_file():
+            raise ValueError(f"Model artifact does not exist: {self.model_path}")
+        return self
+
+    @classmethod
+    def from_yaml(cls, yaml_path: Path) -> "InferenceConfig":
+        yaml_path = yaml_path.resolve()
+        base_dir = Path.cwd()
+        with yaml_path.open(encoding="utf-8") as config_file:
+            config_data = yaml.safe_load(config_file) or {}
+
+        if "model_path" in config_data:
+            config_data["model_path"] = _resolve_path(
+                config_data["model_path"], base_dir
+            )
+        config_data["output_dir"] = _resolve_path(
+            config_data.get("output_dir", "gradcam_output"), base_dir
+        )
+        data_config = config_data.get("data", {})
+        for data_key in ("dataset_path", "data_path"):
+            if data_key in data_config:
+                data_config[data_key] = _resolve_path(
+                    data_config[data_key], base_dir
+                )
+        return cls.model_validate(config_data)
+
+
+def _resolve_path(value: str | Path, base_dir: Path) -> Path:
+    path = Path(value).expanduser()
+    return path if path.is_absolute() else (base_dir / path).resolve()
+
+
+    
+
 class DataConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -68,6 +133,9 @@ class ModelConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_model_config(self) -> "ModelConfig":
+        if self.arch == "cell" and self.premodel not in CELL_SUPPORTED_ARCHITECTURES:
+            raise ValueError(f"Cell models require premodel in {CELL_SUPPORTED_ARCHITECTURES}.")
+
         if self.arch == "pretrained" and self.premodel is None:
             raise ValueError("Specify premodel for pretrained architecture.")
 
@@ -75,6 +143,34 @@ class ModelConfig(BaseModel):
             raise ValueError("Specify pretrained_path for pretrained architecture.")
 
         return self
+
+
+class InferenceModelConfig(BaseModel):
+    """Model metadata loaded from a training run's summary.json."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    model: ModelConfig
+    num_classes: int = Field(gt=1)
+    class_names: list[str] = Field(min_length=2)
+
+    @model_validator(mode="after")
+    def validate_class_metadata(self) -> "InferenceModelConfig":
+        if self.num_classes != len(self.class_names):
+            raise ValueError("num_classes must match the number of class_names.")
+        return self
+
+    @classmethod
+    def from_summary(cls, summary_path: Path) -> "InferenceModelConfig":
+        with summary_path.open(encoding="utf-8") as summary_file:
+            summary = json.load(summary_file)
+        return cls.model_validate(
+            {
+                "model": summary["model"],
+                "num_classes": summary["num_classes"],
+                "class_names": summary["class_names"],
+            }
+        )
 
 class TrainConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")

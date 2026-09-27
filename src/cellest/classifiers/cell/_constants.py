@@ -1,7 +1,6 @@
 SUPPORTED_ARCHITECTURES = [
     "resnet",
     "inception",
-    "dino"
 ]
 
 SUPPORTED_CLASSIFIER_TYPES = [
