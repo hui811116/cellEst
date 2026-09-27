@@ -87,6 +87,16 @@ def test_metrics_all_supports_multiclass_scores():
     assert 0.0 <= metrics["roc"] <= 1.0
 
 
+def test_metrics_all_returns_nan_for_single_class_binary_validation():
+    logits = torch.tensor([[4.0, 1.0], [5.0, 1.0]], dtype=torch.float32)
+    labels = torch.tensor([0, 0], dtype=torch.long)
+
+    metrics = metrics_all(logits, labels)
+
+    assert torch.isnan(torch.tensor(metrics["prc"]))
+    assert torch.isnan(torch.tensor(metrics["roc"]))
+
+
 def test_train_classifier_keeps_frozen_backbone_in_eval_mode(tmp_path):
     model = DummyTrainModel()
     optimizer = torch.optim.SGD(model._classifier.parameters(), lr=0.1)

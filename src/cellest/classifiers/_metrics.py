@@ -51,7 +51,11 @@ def metrics_all(y_pred, y_true):
     unique_labels = np.unique(labels)
     if probabilities.shape[1] == 2:
         positive_scores = probabilities[:, 1]
-        prc = float(average_precision_score(labels, positive_scores))
+        prc = (
+            float(average_precision_score(labels, positive_scores))
+            if unique_labels.size == 2
+            else float("nan")
+        )
         roc = (
             float(roc_auc_score(labels, positive_scores))
             if unique_labels.size == 2
