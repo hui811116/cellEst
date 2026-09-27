@@ -17,7 +17,7 @@
 ## [0.1.1] - 2026-09-26
 - Packaging cellest as a classification package supporting HuggingFace pretrained model
 - Upgrade source file structure for packaging
-- Conguration change: now one configure the data paths, model names, and training parameters using a config.yaml
+- Configuration change: now one configure the data paths, model names, and training parameters using a config.yaml
 
 
 ## [0.2.1] - 2026-09-27

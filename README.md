@@ -22,7 +22,7 @@ The project requires Python 3.10 or newer.
 pip install -e .
 ```
 
-To install the pinned environment dependencies instead:
+This installs the package with pip-compatible core dependencies. To reproduce the pinned CUDA 12.4 environment instead:
 
 ```bash
 pip install -r requirements.txt
@@ -47,7 +47,6 @@ Examples include:
 
 - `facebook/dino-vitb16`
 - `google/vit-base-patch16-224`
-- `microsoft/swin-tiny-patch4-window7-224`
 
 Both families expose the same classifier and Grad-CAM integration used by the training and inference examples.
 

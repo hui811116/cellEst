@@ -8,7 +8,7 @@ model:
   # Below is an example of a transformer model configuration.
   family: "transformer" #cnn | transformer
   architecture: "vision_transformer"
-  pretrained_path: "facebook/dino-vitb16" # pretrained model path, other examples: "google/vit-base-patch16-224", "microsoft/swin-tiny-patch4-window7-224"
+  pretrained_path: "facebook/dino-vitb16" # pretrained model path, other example: "google/vit-base-patch16-224"
   classifier_type: "linear"
   #comment the above lines and uncomment the following lines for a cnn model configuration
   # #uncomment the following line for a cnn model configuration

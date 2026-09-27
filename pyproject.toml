@@ -24,7 +24,7 @@ classifiers = [
 dynamic = ["dependencies"]
 
 [tool.setuptools.dynamic]
-dependencies = { file = ["requirements.txt"] }
+dependencies = { file = ["requirements-package.txt"] }
 
 [tool.uv.sources]
 torch = { index = "pytorch-cu124" }

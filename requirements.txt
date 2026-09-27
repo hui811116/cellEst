@@ -1,3 +1,4 @@
+--extra-index-url https://download.pytorch.org/whl/cu124
 certifi==2026.7.22
 charset-normalizer==3.5.1
 cjdk==0.5.0

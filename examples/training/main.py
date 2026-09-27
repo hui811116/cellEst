@@ -35,7 +35,11 @@ def build_model(model_cfg, nclasses):
     """instantiate the classifier described by the validated model config"""
     if model_cfg.family == "cnn":
         return CNNClassifier(nclasses, model_cfg.architecture, model_cfg.classifier_type)
-    return TransformerClassifier(cast(str, model_cfg.pretrained_path), nclasses)
+    return TransformerClassifier(
+        cast(str, model_cfg.pretrained_path),
+        nclasses,
+        model_cfg.classifier_type,
+    )
 
 
 def evaluate_model(model, loader, classes, criterion, device):
@@ -60,7 +64,7 @@ def build_data_loaders(config, model, device):
     if config.model.family == "cnn":
         transform_train, transform_test = get_transforms(config.model.architecture)
     else:
-        transform_train = lambda image: model.preprocess([image], device)[0].cpu()
+        transform_train = lambda image: model.preprocess([image])[0]
         transform_test = transform_train
     train_set, validation_set, test_set = build_datasets(
         config.data, transform_train, transform_test

@@ -1,9 +1,28 @@
 import torch
 import tqdm
 
+
+def _head_module(model):
+    if hasattr(model, "_classifier"):
+        return model._classifier
+    if hasattr(model, "classifier"):
+        return model.classifier
+    if hasattr(model, "backbone") and hasattr(model.backbone, "fc"):
+        return model.backbone.fc
+    raise ValueError("Cannot identify the trainable classifier head for checkpointing.")
+
+
+def _set_train_mode(classifier):
+    classifier.train()
+    backbone = getattr(classifier, "backbone", None)
+    if backbone is not None:
+        backbone.eval()
+    _head_module(classifier).train()
+
+
 def train_classifier(classifier, train_loader, optimizer, criterion, device):
     """train the classifier for one epoch"""
-    classifier.train()
+    _set_train_mode(classifier)
     running_loss = 0.0
     correct = 0
     total = 0
@@ -51,7 +70,7 @@ def build_scheduler(train_cfg, optimizer):
 
 def save_training_checkpoint(path, model, optimizer, scheduler, epoch, best_epoch, best_val_auc):
     checkpoint = {
-        "classifier_state_dict": model.classifier.state_dict() if hasattr(model, "classifier") else None,
+        "classifier_state_dict": _head_module(model).state_dict(),
         "optimizer_state_dict": optimizer.state_dict(),
         "scheduler_state_dict": scheduler.state_dict() if scheduler is not None else None,
         "epoch": epoch,
@@ -59,10 +78,3 @@ def save_training_checkpoint(path, model, optimizer, scheduler, epoch, best_epoc
         "best_val_auc": best_val_auc,
     }
     torch.save(checkpoint, path)
-
-def _head_module(model):
-    if hasattr(model, "classifier"):
-        return model.classifier
-    if hasattr(model, "backbone") and hasattr(model.backbone, "fc"):
-        return model.backbone.fc
-    raise ValueError("Cannot identify the trainable classifier head for checkpointing.")

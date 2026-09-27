@@ -81,6 +81,7 @@ def build_gradcam(model_info: InferenceModelConfig, state_dict, device):
         model = TransformerClassifier(
             model_name=cast(str, model_config.pretrained_path),
             num_classes=model_info.num_classes,
+            classifier_type=model_config.classifier_type,
         ).to(device)
 
     model.load_state_dict(state_dict)
