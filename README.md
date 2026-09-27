@@ -1,37 +1,56 @@
 # cellEst
-Computer Vision and Deep Learning–Based Senescent Cell Identification
+Computer Vision and Deep Learning-Based Senescent Cell Identification
 
 ## Overview
 
-This repository provides utilities for converting microscopy data into a format
-suitable for PyTorch and training deep models to distinguish senescent cells.
+cellEst is a Python package for preparing microscopy datasets, training image classifiers, evaluating trained models, and generating Grad-CAM visualizations for senescent-cell classification.
 
-### Key Concepts
+The current package workflow is configuration-driven:
 
-- **Data format** – Raw 16‑bit TIFF images are converted to RGB `.tif` using
-  PyImageJ utilities.
-- **Dataset handling** – We use `torchvision.datasets.ImageFolder` to build
-  datasets where each subfolder corresponds to a class label.
-- **Feature extraction** – Pre‑trained CNNs (ResNet or Inception) are used as
-  backbone extractors.
-- **Classifier** – Extracted features are fed to a small fully connected network
-  that produces logits for the target classes.
-- **Scripts provided**:
-  1. `main_load_doxtreated_dataset.py` – Splits a single image folder into
-     training and testing subsets, trains a model, and saves logs/arguments.
-  2. `main_transfer_test.py` – Performs transfer evaluation using separate
-     training and testing folders.
+- Dataset splits and paths are defined in YAML.
+- Models are organized into `cnn` and `transformer` families.
+- Training writes model weights and run metadata to a timestamped results directory.
+- Inference loads the trained model artifact and its `summary.json` metadata.
+
+The repository also contains older standalone scripts under [examples/scripts](examples/scripts). They remain useful as practical references for dataset preparation and legacy transfer-learning workflows.
 
 ## Installation
 
-> _Assumes you have Python 3.8+ and PyTorch installed.  See `requirements.txt`
-> if provided._
+The project requires Python 3.10 or newer.
 
 ```bash
-pip install -r requirements.txt  # if available
+pip install -e .
 ```
 
-## DVC-based MLOps Pipeline
+This installs the package with portable pip-compatible core dependencies. To reproduce the pinned CUDA 12.4 environment instead:
+
+```bash
+pip install -r requirements.txt
+```
+
+## Supported Architectures
+
+### CNN
+
+The CNN family uses torchvision ImageNet backbones with a trainable `linear` or `mlp` classification head:
+
+- `resnet101` with 224x224 inputs
+- `inception_v3` with 299x299 inputs
+- `convnext_base` with 224x224 inputs
+- `efficientnet_v2_m` with 480x480 inputs
+
+### Transformer
+
+The transformer family loads Hugging Face vision backbones through `transformers`. The supported architecture identifier is `vision_transformer`; the concrete model is selected by `pretrained_path`.
+
+Examples include:
+
+- `facebook/dino-vitb16`
+- `google/vit-base-patch16-224`
+
+Both families expose the same classifier and Grad-CAM integration used by the training and inference examples.
+
+## DVC-Based MLOps Pipeline
 
 This project uses DVC to turn the data preprocessing and model training workflow into a reproducible MLOps pipeline. The pipeline is defined in `dvc.yaml`, with stages for preprocessing microscopy data and training the classifier. To use it, first initialize DVC in the repository if needed (`dvc init`), then run `dvc repro` to execute the pipeline end-to-end from raw images to trained model artifacts. You can inspect the execution graph with `dvc dag`, check for stale outputs with `dvc status`, and push versioned data/model artifacts to remote storage with `dvc push`. This makes the raw data, processed datasets, and trained models traceable to specific commits, which is essential for reproducible ML experiments and collaborative model development.
 
@@ -45,10 +64,11 @@ dvc push
 
 To use DVC, first create a folder ```data/raw``` at the main directory. Put your dataset folder in it and each folder should contains two folders named ```data/raw/YOUR_DATASET/control``` and ```data/raw/YOUR_DATASET/senescent```. After ```dvc repro``` you will see ```data/processed/control/YOUR_DATASET``` and ```data/processed/senescent/YOUR_DATASET```. Appended dataset can simply configure the ```dvc.yaml``` and add your new dataset therein.
 
-
 ## Usage
 
 ### Preparing Data
+
+The preprocessing instructions below are unchanged. For implementation details and additional examples, see the scripts in [examples/scripts](examples/scripts), especially [script_pyimageJ_batch_chs.py](examples/scripts/script_pyimageJ_batch_chs.py) and [main_load_doxtreated_dataset.py](examples/scripts/main_load_doxtreated_dataset.py).
 
 1. Convert raw TIFFs to RGB using `pyimageJ_batch_composite.py`:
    ```sh
@@ -82,56 +102,108 @@ To use DVC, first create a folder ```data/raw``` at the main directory. Put your
        └── r03c01-ch2.tiff
    ```
 
-### Training Scripts
+### Dataset Layout
 
-- **Split training/testing from one folder**
-  ```sh
-  python main_load_doxtreated_dataset.py /path/to/images [--options]
-  ```
-  This script will save a pickle file containing logs and the parsed
-  arguments (including the chosen pretrained model).
+Training and inference use `torchvision.datasets.ImageFolder`. The configured dataset directory must contain one subdirectory per class:
 
-- **Transfer evaluation with explicit folders**
-  ```sh
-  python main_transfer_test.py /path/to/train /path/to/test [--options]
-  ```
-  *Ensure that class subfolders exist in both train and test directories and
-  that their names match.*
-
-### Selecting the Pretrained Model
-
-Both scripts accept a `--model` flag with two choices:
-```
---model {resnet,inception}
-```
-- `resnet` uses ResNet101 with 224×224 input size.
-- `inception` (default) uses Inception‑V3 with 299×299 input size.
-
-You can explicitly set the model at training time:
-```sh
-python main_load_doxtreated_dataset.py /data/images --model resnet
+```text
+data/processed/
+├── control/
+│   └── image_001.tif
+└── senescent/
+    └── image_002.tif
 ```
 
-When running `main_transfer_test.py`, you can either specify the model again or
-load it from a previous training pickle:
-```sh
-python main_transfer_test.py train_dir test_dir --load_args_from
-    results_split/split_trts0.90_ep20_bs8_sd42.pkl
+Class folder ordering is stored in `summary.json` and checked during inference.
+
+### Training
+
+The packaged training entry point reads [examples/training/config.yaml](examples/training/config.yaml):
+
+```bash
+python examples/training/main.py \
+    --config examples/training/config.yaml
 ```
-In the latter case the model choice stored in the saved arguments is applied
-automatically.
 
-To override a loaded model, simply include `--model` on the command line again.
+The configuration contains three sections:
 
-### Examining Options
+```yaml
+data:
+  train_data_path: data/processed
+  split_ratio: 0.8
 
-Run any script without arguments to view all available flags and defaults:
-```sh
-python main_load_doxtreated_dataset.py
-python main_transfer_test.py
+model:
+  family: cnn
+  architecture: convnext_base
+  classifier_type: mlp
+
+train:
+  batch_size: 16
+  epochs: 5
+  learning_rate: 0.001
+  optimizer: adam
+  output_dir: results
 ```
+
+For a transformer model, use a Hugging Face model identifier:
+
+```yaml
+model:
+  family: transformer
+  architecture: vision_transformer
+  pretrained_path: facebook/dino-vitb16
+  classifier_type: linear
+```
+
+`validation_data_path` and `test_data_path` are optional. When no validation path is supplied, the training dataset is split using `split_ratio`.
+
+Each training run creates a directory containing metrics, plots, `summary.json`, and `model.pt`. The summary stores the validated model configuration, class names, and class count. The model artifact stores the trained state dictionary and metadata required for inference.
+
+### Grad-CAM Inference
+
+Configure [examples/inference/inference.yaml](examples/inference/inference.yaml) with the trained `model.pt`, an `ImageFolder` dataset path, the target class, and an output directory:
+
+```yaml
+model_path: results/cnn_convnext_base_run/model.pt
+data:
+  dataset_path: data/processed
+output_dir: gradcam_output
+target_class: senescent
+batch_size: 4
+threshold: 0.5
+```
+
+Run inference from the repository root so relative paths are resolved from the current working directory:
+
+```bash
+python examples/inference/main.py \
+    --config examples/inference/inference.yaml
+```
+
+Use `--force_cpu` when GPU inference is unavailable:
+
+```bash
+python examples/inference/main.py \
+    --config examples/inference/inference.yaml \
+    --force_cpu
+```
+
+For every input image, inference writes a side-by-side visualization:
+
+- Left: the model-sized image with the Grad-CAM contour.
+- Right: the same model-sized image with the Grad-CAM heatmap overlay.
+
+The output preserves the dataset class subdirectory structure.
+
+### Legacy Example Scripts
+
+The scripts in [examples/scripts](examples/scripts) document earlier workflows and are useful for preparing data or reproducing older experiments:
+
+- [script_pyimageJ_batch_chs.py](examples/scripts/script_pyimageJ_batch_chs.py) creates channel-specific composites.
+
+New experiments should use the packaged training and inference entry points above.
 
 ## Contact
 
-Dr. Teng‑Hui Huang  
+Dr. Teng-Hui Huang  
 <tenghui.huang@sydney.edu.au>
