@@ -16,7 +16,7 @@ class DummyBlock(nn.Module):
 
 
 class DummyTransformerBackbone(nn.Module):
-    def __init__(self, model_type="vit"):
+    def __init__(self, model_type="vit", include_target_layer=True):
         super().__init__()
         self.config = SimpleNamespace(
             hidden_size=8,
@@ -24,9 +24,9 @@ class DummyTransformerBackbone(nn.Module):
             model_type=model_type,
             num_register_tokens=0,
         )
-        self.encoder = SimpleNamespace(
-            layer=nn.ModuleList([DummyBlock()])
-        )
+        self.encoder = SimpleNamespace(layer=nn.ModuleList([DummyBlock()]))
+        if not include_target_layer:
+            del self.encoder.layer[-1].norm1
 
     def forward(self, pixel_values):
         batch_size = pixel_values.shape[0]
@@ -168,3 +168,15 @@ def test_transformer_classifier_uses_requested_head_and_rejects_swin(monkeypatch
         assert "ViT-compatible model" in str(error)
     else:
         raise AssertionError("Expected Swin backbones to be rejected.")
+
+    monkeypatch.setattr(
+        "cellest.classifiers.pretrained._transformer_cla.transformers.AutoModel.from_pretrained",
+        lambda _: DummyTransformerBackbone(include_target_layer=False),
+    )
+
+    try:
+        TransformerClassifier("google/vit-base-patch16-224", 3, "linear")
+    except ValueError as error:
+        assert "tensor-output transformer target layer" in str(error)
+    else:
+        raise AssertionError("Expected unsupported encoder layouts to be rejected.")

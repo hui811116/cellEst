@@ -69,12 +69,16 @@ class TransformerClassifier(nn.Module):
                 "Unsupported transformer backbone configuration. The model must expose "
                 "'hidden_size' and 'patch_size' for classifier and Grad-CAM support."
             )
+        self._get_supported_target_layer()
 
     @property
     def target_layers(self):
         return self.get_target_layers()
 
     def get_target_layers(self):
+        return [self._get_supported_target_layer()]
+
+    def _get_supported_target_layer(self):
         encoder = getattr(self.backbone, "encoder", None)
         for name in ("layer", "layers"):
             layers = getattr(encoder, name, None)
@@ -83,7 +87,7 @@ class TransformerClassifier(nn.Module):
                 for norm_name in ("norm1", "layernorm_before"):
                     layer = getattr(block, norm_name, None)
                     if isinstance(layer, nn.Module):
-                        return [layer]
+                        return layer
         raise ValueError("Could not find a tensor-output transformer target layer.")
 
     @property

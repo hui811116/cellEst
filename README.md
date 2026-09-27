@@ -22,7 +22,7 @@ The project requires Python 3.10 or newer.
 pip install -e .
 ```
 
-This installs the package with pip-compatible core dependencies. To reproduce the pinned CUDA 12.4 environment instead:
+This installs the package with portable pip-compatible core dependencies. To reproduce the pinned CUDA 12.4 environment instead:
 
 ```bash
 pip install -r requirements.txt
