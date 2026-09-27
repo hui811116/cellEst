@@ -12,9 +12,9 @@ progressbar2==4.6.0
 pyimagej==1.8.0
 PyYAML==6.0.3
 scikit-learn==1.8.0
-torch==2.4.1
-torchaudio==2.4.1
+torch==2.6.0
+torchaudio==2.6.0
 torcheval==0.0.7
-torchvision==0.19.1
+torchvision==0.21.0
 tqdm==4.70.1
 transformers==4.48.3
