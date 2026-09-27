@@ -64,7 +64,9 @@ def build_data_loaders(config, model, device):
     if config.model.family == "cnn":
         transform_train, transform_test = get_transforms(config.model.architecture)
     else:
-        transform_train = lambda image: model.preprocess([image])[0]
+        def transform_train(image):
+            return model.preprocess([image])[0]
+
         transform_test = transform_train
     train_set, validation_set, test_set = build_datasets(
         config.data, transform_train, transform_test
