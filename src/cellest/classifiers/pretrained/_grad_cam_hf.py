@@ -83,31 +83,3 @@ class HFTransformerGradCAM(nn.Module):
 			batch_size, grid_height, grid_width, channels
 		)
 		return patch_maps.permute(0, 3, 1, 2)
-
-	# def generate(self, images, target_classes: int | Sequence[int]):
-	# 	"""Generate one Grad-CAM map per image for the requested class index."""
-	# 	try:
-	# 		from pytorch_grad_cam import GradCAM
-	# 		from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
-	# 	except ImportError as error:
-	# 		raise ImportError(
-	# 			"Grad-CAM support requires the 'grad-cam' package. "
-	# 			"Install project requirements before generating maps."
-	# 		) from error
-
-	# 	pixel_values = self.preprocess(images).requires_grad_(True)
-	# 	if isinstance(target_classes, int):
-	# 		class_indices = [target_classes] * pixel_values.shape[0]
-	# 	else:
-	# 		class_indices = list(target_classes)
-	# 	if len(class_indices) != pixel_values.shape[0]:
-	# 		raise ValueError("Pass one target class index per image in the batch.")
-
-	# 	targets = [ClassifierOutputTarget(index) for index in class_indices]
-	# 	self.eval()
-	# 	with GradCAM(
-	# 		model=self,
-	# 		target_layers=[self.target_layer],
-	# 		reshape_transform=self.reshape_transform,
-	# 	) as cam:
-	# 		return cam(input_tensor=pixel_values, targets=cast(Any, targets))
