@@ -61,6 +61,16 @@ class DummyTrainModel(nn.Module):
         return self._classifier(self.backbone(inputs))
 
 
+class DummyFinetuneModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.backbone = nn.Sequential(nn.BatchNorm1d(4), nn.Linear(4, 4))
+        self.classifier = nn.Linear(4, 2)
+
+    def forward(self, inputs):
+        return self.classifier(self.backbone(inputs))
+
+
 def test_metrics_all_supports_multiclass_scores():
     logits = torch.tensor(
         [[6.0, 1.0, 0.5], [0.5, 5.0, 0.5], [0.5, 0.25, 5.0]],
@@ -92,6 +102,18 @@ def test_train_classifier_keeps_frozen_backbone_in_eval_mode(tmp_path):
     save_training_checkpoint(checkpoint_path, model, optimizer, None, 1, 1, 0.9)
     checkpoint = torch.load(checkpoint_path, weights_only=True)
     assert checkpoint["classifier_state_dict"].keys() == model._classifier.state_dict().keys()
+
+
+def test_train_classifier_keeps_trainable_backbone_in_train_mode():
+    model = DummyFinetuneModel()
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+    criterion = nn.CrossEntropyLoss()
+    loader = [(torch.randn(4, 4), torch.tensor([0, 1, 0, 1]))]
+
+    train_classifier(model, loader, optimizer, criterion, torch.device("cpu"))
+
+    assert model.backbone.training is True
+    assert model.classifier.training is True
 
 
 def test_hf_transformer_gradcam_uses_classifier_backbone():

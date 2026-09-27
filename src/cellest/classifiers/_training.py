@@ -15,7 +15,7 @@ def _head_module(model):
 def _set_train_mode(classifier):
     classifier.train()
     backbone = getattr(classifier, "backbone", None)
-    if backbone is not None:
+    if backbone is not None and not any(parameter.requires_grad for parameter in backbone.parameters()):
         backbone.eval()
     _head_module(classifier).train()
 
