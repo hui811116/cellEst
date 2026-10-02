@@ -22,7 +22,7 @@ The project requires Python 3.10 or newer.
 pip install -e .
 ```
 
-This installs the package with portable pip-compatible core dependencies. To reproduce the pinned CUDA 12.4 environment instead:
+This installs the package with portable pip-compatible core dependencies. To install the full pinned environment, which uses CUDA when available and falls back to CPU otherwise:
 
 ```bash
 pip install -r requirements.txt
@@ -49,20 +49,6 @@ Examples include:
 - `google/vit-base-patch16-224`
 
 Both families expose the same classifier and Grad-CAM integration used by the training and inference examples.
-
-## DVC-Based MLOps Pipeline
-
-This project uses DVC to turn the data preprocessing and model training workflow into a reproducible MLOps pipeline. The pipeline is defined in `dvc.yaml`, with stages for preprocessing microscopy data and training the classifier. To use it, first initialize DVC in the repository if needed (`dvc init`), then run `dvc repro` to execute the pipeline end-to-end from raw images to trained model artifacts. You can inspect the execution graph with `dvc dag`, check for stale outputs with `dvc status`, and push versioned data/model artifacts to remote storage with `dvc push`. This makes the raw data, processed datasets, and trained models traceable to specific commits, which is essential for reproducible ML experiments and collaborative model development.
-
-```bash
-dvc init
-dvc repro
-dvc dag
-dvc status
-dvc push
-```
-
-To use DVC, first create a folder ```data/raw``` at the main directory. Put your dataset folder in it and each folder should contains two folders named ```data/raw/YOUR_DATASET/control``` and ```data/raw/YOUR_DATASET/senescent```. After ```dvc repro``` you will see ```data/processed/control/YOUR_DATASET``` and ```data/processed/senescent/YOUR_DATASET```. Appended dataset can simply configure the ```dvc.yaml``` and add your new dataset therein.
 
 ## Usage
 
