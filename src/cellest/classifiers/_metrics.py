@@ -1,0 +1,97 @@
+import numpy as np
+import torch
+from sklearn.metrics import (
+    accuracy_score,
+    average_precision_score,
+    confusion_matrix,
+    f1_score,
+    precision_recall_curve,
+    recall_score,
+    roc_auc_score,
+    roc_curve,
+)
+from sklearn.preprocessing import label_binarize
+
+
+def _multiclass_auc(labels, probabilities):
+    present_classes = np.unique(labels)
+    if present_classes.size < 2:
+        return float("nan")
+    return float(
+        roc_auc_score(
+            labels,
+            probabilities[:, present_classes],
+            labels=present_classes.tolist(),
+            multi_class="ovr",
+            average="macro",
+        )
+    )
+
+
+def _multiclass_ap(labels, probabilities):
+    present_classes = np.unique(labels)
+    if present_classes.size < 2:
+        return float("nan")
+    binary_labels = label_binarize(labels, classes=present_classes)
+    return float(
+        average_precision_score(
+            binary_labels,
+            probabilities[:, present_classes],
+            average="macro",
+        )
+    )
+
+
+def metrics_all(y_pred, y_true):
+    """Calculate classification metrics from logits and integer labels."""
+    logits = torch.as_tensor(y_pred).detach().float().cpu()
+    labels = torch.as_tensor(y_true).detach().long().cpu().numpy()
+    probabilities = torch.softmax(logits, dim=1).numpy()
+    predictions = logits.argmax(dim=1).numpy()
+    unique_labels = np.unique(labels)
+    if probabilities.shape[1] == 2:
+        positive_scores = probabilities[:, 1]
+        prc = (
+            float(average_precision_score(labels, positive_scores))
+            if unique_labels.size == 2
+            else float("nan")
+        )
+        roc = (
+            float(roc_auc_score(labels, positive_scores))
+            if unique_labels.size == 2
+            else float("nan")
+        )
+        average = "binary"
+    else:
+        prc = _multiclass_ap(labels, probabilities)
+        roc = _multiclass_auc(labels, probabilities)
+        average = "macro"
+
+    return {
+        "acc": float(accuracy_score(labels, predictions)),
+        "prc": prc,
+        "roc": roc,
+        "f1": float(f1_score(labels, predictions, average=average, zero_division=0)),
+        "recall": float(recall_score(labels, predictions, average=average, zero_division=0)),
+    }
+
+
+def binary_curves(y_true, y_prob, threshold=0.5):
+    """Return binary ROC/PR curve coordinates and a fixed-label confusion matrix."""
+    labels = np.asarray(y_true, dtype=np.int64)
+    probabilities = np.asarray(y_prob, dtype=np.float64)
+    if np.unique(labels).size != 2:
+        raise ValueError("ROC and PR plots require both classes in the evaluation set.")
+
+    fpr, tpr, _ = roc_curve(labels, probabilities)
+    precision, recall, _ = precision_recall_curve(labels, probabilities)
+    predictions = (probabilities > threshold).astype(np.int64)
+    matrix = confusion_matrix(labels, predictions, labels=[0, 1])
+    return {
+        "fpr": fpr,
+        "tpr": tpr,
+        "precision": precision,
+        "recall": recall,
+        "confusion_matrix": matrix,
+        "roc_auc": float(roc_auc_score(labels, probabilities)),
+    }
