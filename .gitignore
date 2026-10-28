@@ -232,3 +232,4 @@ __marimo__/
 *.csv
 *.json
 *.npy
+*.pth
