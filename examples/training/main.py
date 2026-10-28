@@ -8,6 +8,7 @@ matplotlib.use("Agg")
 import torch
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
+from cellest.dataloader import ImageTableSource
 
 from cellest.config import CellestClaTrainConfig
 from cellest.classifiers import (
@@ -130,7 +131,10 @@ def train_epochs(model, train_loader, validation_loader, optimizer, scheduler, c
 def run_training(config, args):
     setup_seed(args.seed)
     device = get_device(force_cpu=args.force_cpu)
-    classes = ImageFolder(str(config.data.train_data_path)).classes
+    if config.data.train_data_file is not None:
+        classes = ImageTableSource(config.data.train_data_file, dataset_base=config.data.dataset_base_path).classes
+    else:
+        classes = ImageFolder(str(config.data.train_data_path)).classes
     model = build_model(config.model, len(classes))
     (
         train_set,
@@ -181,7 +185,7 @@ def run_training(config, args):
 
     summary = {
         "run_name": run_name,
-        "dataset": config.data.train_data_path.name,
+        "dataset": (config.data.train_data_file or config.data.train_data_path).name,
         "model_size": model_size,
         "channels": 3,
         "head": config.model.classifier_type,

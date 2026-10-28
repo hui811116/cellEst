@@ -7,22 +7,22 @@ cellEst is a Python package for preparing microscopy datasets, training image cl
 
 The current package workflow is configuration-driven:
 
-- Dataset splits and paths are defined in YAML.
+- Datasets are defined in YAML, either as image folders or as a `.csv`/`.json` table of image urls and classes.
 - Models are organized into `cnn` and `transformer` families.
 - Training writes model weights and run metadata to a timestamped results directory.
 - Inference loads the trained model artifact and its `summary.json` metadata.
 
-The repository also contains older standalone scripts under [examples/scripts](examples/scripts). They remain useful as practical references for dataset preparation and legacy transfer-learning workflows.
+The repository also contains a preprocessing script and an older transfer-learning script under [examples/scripts](examples/scripts).
 
 ## Installation
 
-The project requires Python 3.10 or newer.
+The project requires Python 3.12 or newer.
 
 ```bash
 pip install -e .
 ```
 
-This installs the package with portable pip-compatible core dependencies. To reproduce the pinned CUDA 12.4 environment instead:
+This installs the package with portable pip-compatible core dependencies. To install the full pinned environment, which uses CUDA when available and falls back to CPU otherwise:
 
 ```bash
 pip install -r requirements.txt
@@ -50,61 +50,40 @@ Examples include:
 
 Both families expose the same classifier and Grad-CAM integration used by the training and inference examples.
 
-## DVC-Based MLOps Pipeline
-
-This project uses DVC to turn the data preprocessing and model training workflow into a reproducible MLOps pipeline. The pipeline is defined in `dvc.yaml`, with stages for preprocessing microscopy data and training the classifier. To use it, first initialize DVC in the repository if needed (`dvc init`), then run `dvc repro` to execute the pipeline end-to-end from raw images to trained model artifacts. You can inspect the execution graph with `dvc dag`, check for stale outputs with `dvc status`, and push versioned data/model artifacts to remote storage with `dvc push`. This makes the raw data, processed datasets, and trained models traceable to specific commits, which is essential for reproducible ML experiments and collaborative model development.
-
-```bash
-dvc init
-dvc repro
-dvc dag
-dvc status
-dvc push
-```
-
-To use DVC, first create a folder ```data/raw``` at the main directory. Put your dataset folder in it and each folder should contains two folders named ```data/raw/YOUR_DATASET/control``` and ```data/raw/YOUR_DATASET/senescent```. After ```dvc repro``` you will see ```data/processed/control/YOUR_DATASET``` and ```data/processed/senescent/YOUR_DATASET```. Appended dataset can simply configure the ```dvc.yaml``` and add your new dataset therein.
-
 ## Usage
 
-### Preparing Data
+The workflow is: (1) preprocess raw TIFFs, (2) organize the dataset, (3) optionally describe it as a `.csv` file, (4) write a `config.yaml`, (5) train, (6) run Grad-CAM inference. Run every command from the repository root.
 
-The preprocessing instructions below are unchanged. For implementation details and additional examples, see the scripts in [examples/scripts](examples/scripts), especially [script_pyimageJ_batch_chs.py](examples/scripts/script_pyimageJ_batch_chs.py) and [main_load_doxtreated_dataset.py](examples/scripts/main_load_doxtreated_dataset.py).
+### 1. Preprocessing Raw Images (optional)
 
-1. Convert raw TIFFs to RGB using `pyimageJ_batch_composite.py`:
-   ```sh
-   python pyimageJ_batch_composite.py cells merged_cells
-   ```
-2. (Optional) Generate channel–specific composites (nucleus or cytoskeleton):
-   ```sh
-   python script_pyimageJ_batch_chs.py cells chs_cells [nu/cy] [--recursive]
-   ```
-   where `nu` selects nucleus and `cy` selects cytoskeleton channels. 
-   Include the `--recursive` flag to search for TIFF files recursively in subfolders.
+[examples/scripts/script_pyimageJ_batch_chs.py](examples/scripts/script_pyimageJ_batch_chs.py) pairs the channel TIFFs (`-ch1` nucleus, `-ch2` cytoskeleton) and merges them with ImageJ:
 
-   **Example Folder Structures:**
+```sh
+python examples/scripts/script_pyimageJ_batch_chs.py <load_path> <save_path> <nu|cy|composite> [--recursive]
+```
 
-   *Without `--recursive`* (Images directly in the load folder):
-   ```text
-   cells/
-   ├── r01c01-ch1.tiff
-   ├── r01c01-ch2.tiff
-   └── ...
-   ```
+- `nu`: nucleus channel, `cy`: cytoskeleton channel, `composite`: both merged into one RGB image.
+- `--recursive` searches subfolders; the folder structure is kept under `<save_path>`.
 
-   *With `--recursive`* (Images inside nested subfolders):
-   ```text
-   cells/
-   ├── Day1/
-   │   ├── r02c01-ch1.tiff
-   │   └── r02c01-ch2.tiff
-   └── Day2/
-       ├── r03c01-ch1.tiff
-       └── r03c01-ch2.tiff
-   ```
+```sh
+python examples/scripts/script_pyimageJ_batch_chs.py cells merged_cells composite --recursive
+```
 
-### Dataset Layout
+Input layouts (without and with `--recursive`):
 
-Training and inference use `torchvision.datasets.ImageFolder`. The configured dataset directory must contain one subdirectory per class:
+```text
+cells/                      cells/
+├── r01c01-ch1.tiff         ├── Day1/
+├── r01c01-ch2.tiff         │   ├── r02c01-ch1.tiff
+└── ...                     │   └── r02c01-ch2.tiff
+                            └── Day2/ ...
+```
+
+### 2. Organizing the Dataset
+
+Two dataset formats are supported. Choose one per training run.
+
+**A. Image folders** (`train_data_path`): one subdirectory per class, read with `torchvision.datasets.ImageFolder`.
 
 ```text
 data/processed/
@@ -114,28 +93,73 @@ data/processed/
     └── image_002.tif
 ```
 
-Class folder ordering is stored in `summary.json` and checked during inference.
+**B. Table file** (`train_data_file`): a `.csv` or `.json` file listing every image and its class. Images can live anywhere, and one class can combine several folders. Use this when classes are spread over several directories or the images are remote.
 
-### Training
+- The **first column** is the image `url`/`uri` (the header must be named `url` or `uri`, case-insensitive).
+- The **second column** is the class name.
+- A uri is a local path (absolute, or relative to `dataset_base_path`) or an `http`/`https`/`ftp`/`file` URL.
 
-The packaged training entry point reads [examples/training/config.yaml](examples/training/config.yaml):
-
-```bash
-python examples/training/main.py \
-    --config examples/training/config.yaml
+```csv
+uri,class_name
+processed/adscs_take_3_processed/P12/r02c05f59p01_type_composite.tiff,natural_senescent
+processed/p4_dox_2026_merge/senescent/r03c01f12p01_type_composite.tiff,chemical_senescent
+https://example.org/images/control_001.png,control
 ```
 
-The configuration contains three sections:
+The equivalent `.json` is a list of objects whose first key is the url/uri and second key the class:
+
+```json
+[
+  {"uri": "processed/p4_dox_2026_merge/control/img_001.tiff", "class_name": "control"},
+  {"uri": "https://example.org/images/control_002.png", "class_name": "control"}
+]
+```
+
+Class indices are the sorted class names of the training file. Validation and test files must only use classes found in the training file.
+
+### 3. Creating the `.csv` from a Data Card
+
+[examples/dataset/main_csv_dataset.py](examples/dataset/main_csv_dataset.py) scans folders listed in a YAML data card and writes the two-column CSV (paths are written as given, relative to the directory you run it from):
+
+```yaml
+# examples/dataset/datacard.yaml
+name: experiment_natural_versus_chemical_senescent
+description: A dataset comparing natural and chemical senescent processes.
+classes:
+  - label:
+      name: natural_senescent
+      paths:
+        - processed/adscs_take_3_processed/P12
+  - label:
+      name: control
+      paths:
+        - processed/adscs_take_3_processed/P4
+        - processed/p4_dox_2026_merge/control
+```
+
+```sh
+python examples/dataset/main_csv_dataset.py examples/dataset/datacard.yaml --output_folder examples/dataset
+```
+
+This writes `examples/dataset/<name>.csv` (images with `.jpg`, `.jpeg`, `.png`, `.bmp`, `.tif`, `.tiff` extensions, found recursively) and prints the class distribution. To use separate train/test sets, build one data card (and CSV) for each.
+
+### 4. Writing `config.yaml`
+
+[examples/training/config.yaml](examples/training/config.yaml) has three sections. Example using a table file:
 
 ```yaml
 data:
-  train_data_path: data/processed
-  split_ratio: 0.8
+  dataset_base_path: "/abs_path/to/dataset/folder"          # use absolute path to avoid confusion
+  train_data_file: "examples/dataset/experiment_natural_versus_chemical_senescent.csv"
+  #validation_data_file: "examples/dataset/validation.csv"  # optional
+  #test_data_file: "examples/dataset/test.csv"              # optional
+  split_ratio: 0.8                    # used when no validation file/path is given
 
 model:
-  family: cnn
-  architecture: convnext_base
-  classifier_type: mlp
+  family: transformer
+  architecture: vision_transformer
+  pretrained_path: facebook/dino-vitb16   # or google/vit-base-patch16-224
+  classifier_type: linear
 
 train:
   batch_size: 16
@@ -145,23 +169,54 @@ train:
   output_dir: results
 ```
 
-For a transformer model, use a Hugging Face model identifier:
+Rules for the `data` section:
+
+- Give exactly one of `train_data_path` (image folders) or `train_data_file` (`.csv`/`.json`). The same format must be used for all splits; mixing is rejected.
+- `dataset_base_path` applies to table files only. A relative value is resolved against the folder containing `config.yaml` (not the working directory or the script location). It is joined to relative `*_data_file` paths and to every relative `uri` in the files. Absolute paths and URLs are used unchanged.
+- Files are validated at load time: supported extension (`.csv`, `.json`), existence, the `url`/`uri` + class header, and non-empty rows.
+- Without a validation path/file, the training data is split with `split_ratio` (stratified by class).
+
+Using image folders instead:
+
+```yaml
+data:
+  train_data_path: data/processed
+  #validation_data_path: data/validation   # optional
+  #test_data_path: data/test               # optional
+  split_ratio: 0.8
+```
+
+For a CNN model:
 
 ```yaml
 model:
-  family: transformer
-  architecture: vision_transformer
-  pretrained_path: facebook/dino-vitb16
-  classifier_type: linear
+  family: cnn
+  architecture: convnext_base   # resnet101 | inception_v3 | convnext_base | efficientnet_v2_m
+  classifier_type: mlp          # mlp | linear
 ```
 
-`validation_data_path` and `test_data_path` are optional. When no validation path is supplied, the training dataset is split using `split_ratio`.
+### 5. Training
 
-Each training run creates a directory containing metrics, plots, `summary.json`, and `model.pt`. The summary stores the validated model configuration, class names, and class count. The model artifact stores the trained state dictionary and metadata required for inference.
+```bash
+python examples/training/main.py --config examples/training/config.yaml
+```
 
-### Grad-CAM Inference
+Options: `--seed 42`, `--force_cpu`, `-v/--verbose`, `--log path/to/logfile.log`.
 
-Configure [examples/inference/inference.yaml](examples/inference/inference.yaml) with the trained `model.pt`, an `ImageFolder` dataset path, the target class, and an output directory:
+Each run creates a directory under `output_dir` containing `history.csv`, `roc.csv`, `pr.csv`, `confmat.npy`, plots, `summary.json` and `model.pt`. The summary stores the validated model configuration, class names and class count. `model.pt` stores the trained state dictionary and the metadata required for inference.
+
+### 6. Testing
+
+```bash
+pip install pytest
+python -m pytest tests -q
+```
+
+[tests/test_config.py](tests/test_config.py) covers both dataset config variants and dataset building; [tests/test_build_pipeline.py](tests/test_build_pipeline.py) runs a small offline config-to-saved-outputs pipeline.
+
+### 7. Grad-CAM Inference
+
+Configure [examples/inference/inference.yaml](examples/inference/inference.yaml) with the trained `model.pt`, an `ImageFolder` dataset path (inference currently reads image folders only), the target class, and an output directory:
 
 ```yaml
 model_path: results/cnn_convnext_base_run/model.pt
@@ -197,11 +252,7 @@ The output preserves the dataset class subdirectory structure.
 
 ### Legacy Example Scripts
 
-The scripts in [examples/scripts](examples/scripts) document earlier workflows and are useful for preparing data or reproducing older experiments:
-
-- [script_pyimageJ_batch_chs.py](examples/scripts/script_pyimageJ_batch_chs.py) creates channel-specific composites.
-
-New experiments should use the packaged training and inference entry points above.
+[examples/scripts/main_load_doxtreated_dataset.py](examples/scripts/main_load_doxtreated_dataset.py) is an earlier standalone transfer-learning script kept for reproducing older experiments. New experiments should use the training and inference entry points above.
 
 ## Contact
 
