@@ -79,15 +79,25 @@ class TransformerClassifier(nn.Module):
         return [self._get_supported_target_layer()]
 
     def _get_supported_target_layer(self):
+        # Preferred locations first, then any block list in the backbone, since the
+        # container layout differs across transformers versions.
         encoder = getattr(self.backbone, "encoder", None)
-        for name in ("layer", "layers"):
-            layers = getattr(encoder, name, None)
-            if layers:
-                block = layers[-1]
-                for norm_name in ("norm1", "layernorm_before"):
-                    layer = getattr(block, norm_name, None)
-                    if isinstance(layer, nn.Module):
-                        return layer
+        containers = [
+            getattr(parent, name, None)
+            for parent in (encoder, self.backbone, getattr(self.backbone, "model", None))
+            for name in ("layer", "layers", "blocks")
+        ]
+        containers += [
+            module for module in self.backbone.modules() if isinstance(module, nn.ModuleList)
+        ]
+        for layers in containers:
+            if not isinstance(layers, (nn.ModuleList, nn.Sequential)) or len(layers) == 0:
+                continue
+            block = layers[-1]
+            for norm_name in ("norm1", "layernorm_before"):
+                layer = getattr(block, norm_name, None)
+                if isinstance(layer, nn.Module):
+                    return layer
         raise ValueError("Could not find a tensor-output transformer target layer.")
 
     @property

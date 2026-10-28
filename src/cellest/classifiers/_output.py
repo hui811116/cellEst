@@ -1,5 +1,6 @@
 import re
 import json
+from pathlib import Path
 from datetime import datetime
 import matplotlib
 matplotlib.use("Agg")
@@ -32,7 +33,17 @@ def save_run_outputs(output_dir, history, curves, model_metadata, summary):
     np.save(output_dir / "confmat.npy", curves["confusion_matrix"])
     torch.save(model_metadata, output_dir / "model.pt")
     with (output_dir / "summary.json").open("w", encoding="utf-8") as summary_file:
-        json.dump(summary, summary_file, indent=2)
+        json.dump(summary, summary_file, indent=2, default=_json_default)
+
+
+def _json_default(value):
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
 def save_run_plots(history, curves, class_names, run_name, evaluation_label, output_dir):

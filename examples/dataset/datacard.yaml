@@ -1,0 +1,21 @@
+name: experiment_natural_versus_chemical_senescent
+description: A dataset comparing natural and chemical senescent processes.
+classes:
+    - label:
+        name: natural_senescent
+        description: Samples representing natural senescence processes.
+        paths:
+            - processed/adscs_take_3_processed/P12
+    - label:
+        name: chemical_senescent
+        description: Samples representing chemically induced senescence processes.
+        paths:
+            - processed/p4_dox_2026_merge/senescent
+    - label: 
+        name: control
+        description: Control samples without senescence induction.
+        paths:
+            - processed/adscs_take_3_processed/P4
+            - processed/p4_dox_2026_merge/control
+
+

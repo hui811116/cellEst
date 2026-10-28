@@ -1,5 +1,14 @@
 data:
-  train_data_path: "data/processed"
+  # Option 1: Specify the path to the training data directory
+  #train_data_path: "data/processed"
+  # Option 2: Specify the path to a CSV file containing training data information
+  # NOTE: to generate .csv file, you can use the `examples/dataset/datacard.yaml` file and run the `examples/dataset/generate_csv.py` script.
+  dataset_base_path: "/absolute/path/to/csv_folder" # base path for dataset files
+  train_data_file: "dataset.csv" # path to the CSV file containing training data information
+  # NOTE: the full path of each data sample is: /absolute/path/to/csv_folder/<path_in_csv_file>
+  # ----------------------
+  # Optional: Specify paths for test and validation datasets
+  # ----------------------
   #test_data_path: "data/test" # optional held-out test dataset
   #validation_data_path: "data/validation" # optional; otherwise split train_data_path
   split_ratio: 0.8 # training fraction when validation_data_path is omitted
@@ -20,4 +29,4 @@ train:
   epochs: 5
   learning_rate: 0.001
   optimizer: "adam"
-  output_dir: "results"
+  output_dir: "results" # directory to save model checkpoints and logs
