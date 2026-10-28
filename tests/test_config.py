@@ -352,3 +352,53 @@ def test_from_yaml_resolves_base_against_config_dir(tmp_path, images, monkeypatc
     assert cfg.data.train_data_file == tmp_path.resolve() / "train.csv"
     train, val, _ = build_datasets(cfg.data, TRANSFORM, TRANSFORM)
     assert len(train) + len(val) == 12
+
+
+def test_csv_row_missing_class_column_raises(tmp_path):
+    path = tmp_path / "train.csv"
+    path.write_text("url,class\na.png,alpha\n\nbroken.png\nb.png,beta\n")
+    with pytest.raises(ValidationError, match="line 4.*missing the class column"):
+        DataConfig(dataset_base_path=tmp_path, train_data_file=path)
+
+
+def test_csv_blank_lines_are_skipped(tmp_path):
+    path = tmp_path / "train.csv"
+    path.write_text("url,class\na.png,alpha\n\n,\nb.png,beta\n")
+    from cellest.dataloader import read_data_file
+
+    assert read_data_file(path) == [("a.png", "alpha"), ("b.png", "beta")]
+
+
+@pytest.mark.parametrize(
+    "record",
+    [{"uri": "a.png", "class": None}, {"uri": None, "class": "alpha"}, {"uri": "a.png", "class": 3}],
+)
+def test_json_null_or_non_string_values_raise(tmp_path, record):
+    path = tmp_path / "train.json"
+    path.write_text(json.dumps([{"uri": "ok.png", "class": "alpha"}, record]))
+    with pytest.raises(ValidationError, match="non-null strings"):
+        DataConfig(dataset_base_path=tmp_path, train_data_file=path)
+
+
+def test_csv_generator_script(tmp_path, images, monkeypatch):
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parents[1] / "examples" / "dataset" / "main_csv_dataset.py"
+    card = tmp_path / "card.yaml"
+    card.write_text(
+        "name: demo\nclasses:\n  - label:\n      name: alpha\n      paths:\n        - " + str(tmp_path) + "\n"
+    )
+    ok = subprocess.run([sys.executable, str(script), str(card), "--output_folder", str(tmp_path)],
+                        capture_output=True, text=True)
+    assert ok.returncode == 0, ok.stderr
+    assert len((tmp_path / "demo.csv").read_text().splitlines()) == 13
+
+    card.write_text(
+        "name: bad\nclasses:\n  - label:\n      name: alpha\n      paths:\n        - " + str(tmp_path / "missing") + "\n"
+    )
+    bad = subprocess.run([sys.executable, str(script), str(card), "--output_folder", str(tmp_path)],
+                         capture_output=True, text=True)
+    assert bad.returncode != 0 and "does not exist" in bad.stderr
+    assert not (tmp_path / "bad.csv").exists()

@@ -5,6 +5,8 @@ import datetime
 from pathlib import Path
 import pandas as pd
 
+IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"}
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("config", type=str, help="Path to the YAML configuration file.")
@@ -25,7 +27,7 @@ if __name__ == "__main__":
     if not config.get("name"):
         dataset_name += f"_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
 
-    df = pd.DataFrame(columns=["uri", "class_name"])
+    rows = []
     """
     name: experiment_natural_versus_chemical_senescent
     description: A dataset comparing natural and chemical senescent processes.
@@ -55,15 +57,21 @@ if __name__ == "__main__":
             label_name = label_dict['name']
             cnt += 1
             for path in label_dict["paths"]:
+                folder = Path(path)
+                if not folder.is_dir():
+                    raise FileNotFoundError(
+                        f"Directory for label '{label_name}' does not exist: {folder}"
+                    )
                 # Recursively find all image files in the specified path
-                for image_path in Path(path).rglob("*"):
-                    if image_path.is_file() and image_path.suffix.lower() in [".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"]:
-                        df = pd.concat([df, pd.DataFrame([[str(image_path), label_name]], columns=["uri", "class_name"])], ignore_index=True)
+                for image_path in sorted(folder.rglob("*")):
+                    if image_path.is_file() and image_path.suffix.lower() in IMAGE_SUFFIXES:
+                        rows.append((str(image_path), label_name))
         else:
             # can support different data formats, such as "attributes"
             raise ValueError(f"Missing 'label' key in class_info: {class_info}")
 
 
+    df = pd.DataFrame(rows, columns=["uri", "class_name"])
     # summary of the dataset
     print(f"Dataset Name: {dataset_name}")
     print(f"Total Samples: {len(df)}")

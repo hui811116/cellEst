@@ -37,7 +37,15 @@ def read_data_file(path: Path) -> list[tuple[str, str]]:
             if header is None:
                 raise ValueError(f"Data file is empty: {path}")
             _check_header(header, path)
-            rows = [(row[0].strip(), row[1].strip()) for row in reader if len(row) >= 2 and any(row)]
+            rows = []
+            for line_number, row in enumerate(reader, start=2):
+                if not any(cell.strip() for cell in row):
+                    continue  # blank line
+                if len(row) < 2:
+                    raise ValueError(
+                        f"Data file {path}, line {line_number}: row is missing the class column: {row}"
+                    )
+                rows.append((row[0].strip(), row[1].strip()))
     else:
         with path.open(encoding="utf-8") as handle:
             records = json.load(handle)
@@ -49,7 +57,11 @@ def read_data_file(path: Path) -> list[tuple[str, str]]:
             values = list(record.values())
             if list(record.keys())[:1] != list(records[0].keys())[:1] or len(values) < 2:
                 raise ValueError(f"Inconsistent record in {path}: {record}")
-            rows.append((str(values[0]).strip(), str(values[1]).strip()))
+            if not all(isinstance(value, str) for value in values[:2]):
+                raise ValueError(
+                    f"Inconsistent record in {path}: url/uri and class must be non-null strings: {record}"
+                )
+            rows.append((values[0].strip(), values[1].strip()))
     if not rows:
         raise ValueError(f"Data file has no samples: {path}")
     if any(not uri or not label for uri, label in rows):
