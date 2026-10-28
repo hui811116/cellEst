@@ -4,18 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cellEst"
-version = "0.2.1"
+version = "0.2.2"
 description = "Computer vision and deep learning-based senescent cell identification using pretrained-model-assisted classifier training"
 readme = "README.md"
-requires-python = ">=3.10"
-license = { text = "MIT" }
+requires-python = ">=3.12"
+license = { text = "Apache 2.0" }
 authors = [
     { name = "Teng-Hui Huang", email = "10260632+hui811116@users.noreply.github.com" },
 ]
 keywords = ["computer-vision", "deep-learning", "senescence", "classifier", "microscopy", "pytorch"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Image Recognition",
@@ -24,7 +24,7 @@ classifiers = [
 dynamic = ["dependencies"]
 
 [tool.setuptools.dynamic]
-dependencies = { file = ["requirements-package.txt"] }
+dependencies = { file = ["requirements.txt"] }
 
 [project.optional-dependencies]
 dev = [
@@ -52,12 +52,12 @@ testpaths = ["tests"]
 
 [tool.black]
 line-length = 100
-target-version = ["py310"]
+target-version = ["py312"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py312"
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.12"
 ignore_missing_imports = true

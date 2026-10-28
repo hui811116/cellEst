@@ -3,12 +3,15 @@ from typing import Literal
 import json
 import yaml
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
+from cellest.dataloader._tabular import check_data_file_extension, read_data_file
 from cellest.classifiers.cell._constants import SUPPORTED_ARCHITECTURES as CELL_SUPPORTED_ARCHITECTURES
 """
 Config.yaml format:
         data:
             train_path: path/to/train/dataset
             test_path: path/to/test/dataset
+            # alternatively: train_data_file / validation_data_file / test_data_file (.csv or .json,
+            # first column url/uri, second column class name) instead of the *_path options
             # if train_path and test_path are not specified, then the dataset will be split into train and test sets
             split_ratio: 0.8 # must be specified if train_path and test_path are not specified
         model:
@@ -94,29 +97,56 @@ def _resolve_path(value: str | Path, base_dir: Path) -> Path:
 class DataConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    train_data_path: Path = Field(
-        validation_alias=AliasChoices("train_data_path", "train_path", "data_path")
+    train_data_path: Path | None = Field(
+        default=None, validation_alias=AliasChoices("train_data_path", "train_path", "data_path")
     )
     validation_data_path: Path | None = None
     test_data_path: Path | None = Field(
         default=None, validation_alias=AliasChoices("test_data_path", "test_path")
     )
+    # .csv/.json files: first column url/uri, second column class name.
+    # dataset_base_path is joined with relative *_data_file paths and relative uris; when loaded
+    # with CellestClaTrainConfig.from_yaml, a relative value is relative to the config file's folder.
+    dataset_base_path: Path = Path(".")
+    train_data_file: Path | None = None
+    validation_data_file: Path | None = None
+    test_data_file: Path | None = None
     split_ratio: float = Field(default=0.8, gt=0, lt=1)
 
     @model_validator(mode="after")
     def validate_data_config(self) -> "DataConfig":
-        # traing datat path is required
-        if not self.train_data_path.exists():
-            raise ValueError(f"Train data path does not exist: {self.train_data_path}")
-        # validation split is optional, if presented, split the training data only
-        if self.validation_data_path is not None and not self.validation_data_path.exists():
-            raise ValueError(f"Validation data path does not exist: {self.validation_data_path}")
-        # split ratio is only used if validation data path is not provided
-        if self.validation_data_path is None and not (0 < self.split_ratio < 1):
+        if (self.train_data_path is None) == (self.train_data_file is None):
+            raise ValueError("Specify exactly one of train_data_path or train_data_file.")
+        if self.train_data_file is not None:
+            self.dataset_base_path = _resolve_path(self.dataset_base_path, Path.cwd())
+            if not self.dataset_base_path.is_dir():
+                raise ValueError(f"dataset_base_path is not a directory: {self.dataset_base_path}")
+            if any(p is not None for p in (self.validation_data_path, self.test_data_path)):
+                raise ValueError("Data paths cannot be mixed with data files; use *_data_file for all splits.")
+            for name in ("train_data_file", "validation_data_file", "test_data_file"):
+                file_path = getattr(self, name)
+                if file_path is None:
+                    continue
+                file_path = _resolve_path(file_path, self.dataset_base_path)
+                setattr(self, name, file_path)
+                check_data_file_extension(file_path)
+                if not file_path.is_file():
+                    raise ValueError(f"{name} does not exist: {file_path}")
+                read_data_file(file_path)
+        else:
+            if "dataset_base_path" in self.model_fields_set:
+                raise ValueError("dataset_base_path only applies to *_data_file inputs.")
+            if any(p is not None for p in (self.validation_data_file, self.test_data_file)):
+                raise ValueError("Data files cannot be mixed with data paths; use *_data_path for all splits.")
+            if not self.train_data_path.exists():
+                raise ValueError(f"Train data path does not exist: {self.train_data_path}")
+            if self.validation_data_path is not None and not self.validation_data_path.exists():
+                raise ValueError(f"Validation data path does not exist: {self.validation_data_path}")
+            if self.test_data_path is not None and not self.test_data_path.exists():
+                raise ValueError(f"Test data path does not exist: {self.test_data_path}")
+        # split ratio is only used if no validation data is provided
+        if not (0 < self.split_ratio < 1):
             raise ValueError(f"Split ratio must be between 0 and 1: {self.split_ratio}")
-        # test path is optional, if presented, check if it exists
-        if self.test_data_path is not None and not self.test_data_path.exists():
-            raise ValueError(f"Test data path does not exist: {self.test_data_path}")
         return self
 
 class ModelConfig(BaseModel):
@@ -200,5 +230,10 @@ class CellestClaTrainConfig(BaseModel):
     @classmethod
     def from_yaml(cls, yaml_path: Path) -> "CellestClaTrainConfig":
         with open(yaml_path, "r") as f:
-            config_dict = yaml.safe_load(f)
+            config_dict = yaml.safe_load(f) or {}
+        data_dict = config_dict.get("data")
+        if isinstance(data_dict, dict) and "dataset_base_path" in data_dict:
+            data_dict["dataset_base_path"] = _resolve_path(
+                data_dict["dataset_base_path"], Path(yaml_path).resolve().parent
+            )
         return cls(**config_dict)
